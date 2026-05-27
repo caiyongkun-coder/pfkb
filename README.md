@@ -34,7 +34,7 @@ PFKB 想做的是本地文件系统上的“知识治理层”，而不是又一
 - 支持增量提取：默认跳过源文件未变化的成功项，支持 `--force` 和 `--retry-failed`。
 - 提供 `pfkb analyze`，基于已提取文本生成本地规则版摘要、标签和知识索引；支持 `--method codex-mock`、`--method local-llm` 和 `--method cloud-llm`。
 - 真实 LLM/API 只读取隐私门控后的提取文本；云端模式还必须显式配置授权路径和风险确认。
-- 提供 `pfkb html`，把 `knowledge-index.jsonl` 转成本地可打开的中文资产浏览页，支持标签树、筛选、搜索和文件详情。
+- 提供 `pfkb html`，把 `knowledge-index.jsonl` 转成本地可打开的中英双语资产浏览页，支持标签树、分页、筛选、搜索和文件详情。
 - 支持直接文本提取；MarkItDown 是可选解析依赖。
 
 ## 快速开始

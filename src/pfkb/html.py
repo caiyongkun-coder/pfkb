@@ -283,7 +283,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
 
     .toolbar {
       display: grid;
-      grid-template-columns: minmax(220px, 1fr) auto auto;
+      grid-template-columns: minmax(220px, 1fr) auto auto auto;
       gap: 10px;
       align-items: center;
       padding: 12px 20px;
@@ -396,6 +396,14 @@ _HTML_TEMPLATE = r"""<!doctype html>
       margin: 0;
       font-size: 15px;
       line-height: 1.3;
+    }
+
+    .title-en {
+      margin-left: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
     }
 
     .pane-title p {
@@ -518,6 +526,40 @@ _HTML_TEMPLATE = r"""<!doctype html>
       margin: 0 0 10px;
       color: var(--muted);
       font-size: 12px;
+    }
+
+    .meta-stack {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pager-button {
+      min-height: 30px;
+      padding: 2px 9px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .pager-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+      background: #f2f4f7;
+    }
+
+    .page-line {
+      color: var(--muted);
+      white-space: nowrap;
     }
 
     .row-list {
@@ -763,6 +805,15 @@ _HTML_TEMPLATE = r"""<!doctype html>
       .metrics {
         justify-content: flex-start;
       }
+
+      .result-meta {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .pager {
+        justify-content: flex-start;
+      }
     }
   </style>
 </head>
@@ -770,49 +821,61 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <h1>PFKB 资产浏览</h1>
+        <h1>PFKB 资产浏览 <span class="title-en">Asset browser</span></h1>
         <div class="source" id="sourceLine"></div>
       </div>
-      <div class="metrics" aria-label="知识库统计">
-        <div class="metric"><strong id="totalCount">0</strong><span>全部文件</span></div>
-        <div class="metric"><strong id="visibleCount">0</strong><span>当前可见</span></div>
-        <div class="metric"><strong id="reviewCount">0</strong><span>需要复核</span></div>
+      <div class="metrics" aria-label="知识库统计 / Knowledge base statistics">
+        <div class="metric"><strong id="totalCount">0</strong><span>全部文件 / Total</span></div>
+        <div class="metric"><strong id="visibleCount">0</strong><span>筛选结果 / Filtered</span></div>
+        <div class="metric"><strong id="reviewCount">0</strong><span>需要复核 / Review</span></div>
       </div>
     </header>
 
-    <section class="toolbar" aria-label="筛选工具栏">
-      <input class="search" id="searchInput" type="search" placeholder="搜索文件名、路径、摘要或标签" autocomplete="off">
-      <select class="select" id="sortSelect" aria-label="排序方式">
-        <option value="title">按标题排序</option>
-        <option value="path">按路径排序</option>
-        <option value="confidence">按置信度排序</option>
-        <option value="review">需要复核优先</option>
+    <section class="toolbar" aria-label="筛选工具栏 / Filter toolbar">
+      <input class="search" id="searchInput" type="search" placeholder="搜索文件名、路径、摘要或标签 / Search name, path, summary, tags" autocomplete="off">
+      <select class="select" id="sortSelect" aria-label="排序方式 / Sort order">
+        <option value="title">按标题排序 / Title</option>
+        <option value="path">按路径排序 / Path</option>
+        <option value="confidence">按置信度排序 / Confidence</option>
+        <option value="review">需要复核优先 / Review first</option>
       </select>
-      <button class="ghost-button" id="clearFilters" type="button">清空筛选</button>
+      <select class="select" id="pageSizeSelect" aria-label="每页条数 / Page size">
+        <option value="10">每页 10 条 / 10 per page</option>
+        <option value="15">每页 15 条 / 15 per page</option>
+        <option value="30">每页 30 条 / 30 per page</option>
+      </select>
+      <button class="ghost-button" id="clearFilters" type="button">清空筛选 / Clear</button>
     </section>
-    <div class="active-filters" id="activeFilters" aria-label="当前筛选"></div>
+    <div class="active-filters" id="activeFilters" aria-label="当前筛选 / Active filters"></div>
 
     <main class="main">
       <aside class="sidebar">
         <div class="pane-title">
-          <h2>标签树</h2>
-          <p>按层级逐步展开</p>
+          <h2>标签树 <span class="title-en">Tag tree</span></h2>
+          <p>按层级逐步展开 / Browse by hierarchy</p>
         </div>
         <div id="facets"></div>
       </aside>
 
-      <section class="results" aria-label="文件列表">
+      <section class="results" aria-label="文件列表 / File list">
         <div class="result-meta">
-          <span id="resultLine">文件列表</span>
-          <span id="filterLine"></span>
+          <div class="meta-stack">
+            <span id="resultLine">文件列表 / File list</span>
+            <span id="filterLine"></span>
+          </div>
+          <div class="pager" aria-label="分页 / Pagination">
+            <button class="pager-button" id="prevPage" type="button">上一页 / Prev</button>
+            <span class="page-line" id="pageLine">第 1 页 / Page 1</span>
+            <button class="pager-button" id="nextPage" type="button">下一页 / Next</button>
+          </div>
         </div>
         <ul class="row-list" id="assetList"></ul>
       </section>
 
-      <aside class="detail" aria-label="文件详情">
+      <aside class="detail" aria-label="文件详情 / File details">
         <div class="pane-title">
-          <h2>文件详情</h2>
-          <p>摘要、标签和分析来源</p>
+          <h2>文件详情 <span class="title-en">File details</span></h2>
+          <p>摘要、标签和分析来源 / Summary, tags, analysis source</p>
         </div>
         <div id="detailPanel"></div>
       </aside>
@@ -858,6 +921,8 @@ _HTML_TEMPLATE = r"""<!doctype html>
     const state = {
       query: "",
       sort: "title",
+      page: 1,
+      pageSize: 10,
       filters: [],
       selectedPath: "",
       collapsed: new Set()
@@ -934,17 +999,20 @@ _HTML_TEMPLATE = r"""<!doctype html>
       } else {
         state.filters.push(next);
       }
+      state.page = 1;
       render();
     }
 
     function removeFilter(kind, value) {
       state.filters = state.filters.filter((filter) => !(filter.kind === kind && filter.value === String(value)));
+      state.page = 1;
       render();
     }
 
     function clearFilters() {
       state.query = "";
       state.filters = [];
+      state.page = 1;
       document.getElementById("searchInput").value = "";
       render();
     }
@@ -1002,29 +1070,38 @@ _HTML_TEMPLATE = r"""<!doctype html>
 
     function render() {
       const records = visibleRecords();
-      if (records.length && !records.some((record) => record.path === state.selectedPath)) {
-        state.selectedPath = records[0].path;
+      const pageCount = Math.max(1, Math.ceil(records.length / state.pageSize));
+      state.page = Math.min(Math.max(state.page, 1), pageCount);
+      const startIndex = (state.page - 1) * state.pageSize;
+      const pageRecords = records.slice(startIndex, startIndex + state.pageSize);
+      if (pageRecords.length && !pageRecords.some((record) => record.path === state.selectedPath)) {
+        state.selectedPath = pageRecords[0].path;
       }
       if (!records.length) {
         state.selectedPath = "";
       }
-      renderHeader(records);
+      renderHeader(records, pageRecords, pageCount);
       renderFilters();
       renderFacets(records);
-      renderList(records);
-      renderDetail(records.find((record) => record.path === state.selectedPath));
+      renderList(pageRecords);
+      renderDetail(pageRecords.find((record) => record.path === state.selectedPath));
     }
 
-    function renderHeader(records) {
+    function renderHeader(records, pageRecords, pageCount) {
       const total = (PFKB_DATA.records || []).length;
       const reviewTotal = (PFKB_DATA.records || []).filter((record) => record.needs_human_review).length;
+      const firstItem = records.length ? (state.page - 1) * state.pageSize + 1 : 0;
+      const lastItem = records.length ? firstItem + pageRecords.length - 1 : 0;
       document.getElementById("totalCount").textContent = total;
       document.getElementById("visibleCount").textContent = records.length;
       document.getElementById("reviewCount").textContent = reviewTotal;
-      const source = PFKB_DATA.source_path ? `来源：${PFKB_DATA.source_path}` : "来源：当前 HTML 内嵌知识索引数据";
-      document.getElementById("sourceLine").textContent = `${source} · 生成时间：${PFKB_DATA.generated_at || ""}`;
-      document.getElementById("resultLine").textContent = `文件列表：${records.length} / ${total}`;
-      document.getElementById("filterLine").textContent = state.filters.length ? `已选 ${state.filters.length} 个筛选` : "";
+      const source = PFKB_DATA.source_path ? `来源 / Source：${PFKB_DATA.source_path}` : "来源 / Source：当前 HTML 内嵌知识索引数据";
+      document.getElementById("sourceLine").textContent = `${source} · 生成时间 / Generated：${PFKB_DATA.generated_at || ""}`;
+      document.getElementById("resultLine").textContent = `文件列表 / File list：${firstItem}-${lastItem} / ${records.length}（全部 / Total ${total}）`;
+      document.getElementById("filterLine").textContent = state.filters.length ? `已选筛选 / Active filters：${state.filters.length}` : `每页 / Page size：${state.pageSize}`;
+      document.getElementById("pageLine").textContent = `第 ${state.page} / ${pageCount} 页 · Page ${state.page} of ${pageCount}`;
+      document.getElementById("prevPage").disabled = state.page <= 1;
+      document.getElementById("nextPage").disabled = state.page >= pageCount;
     }
 
     function renderFilters() {
@@ -1035,10 +1112,10 @@ _HTML_TEMPLATE = r"""<!doctype html>
       }
       const chips = [];
       if (state.query) {
-        chips.push(`<span class="chip">搜索：${escapeHtml(state.query)} <button type="button" data-clear-query aria-label="清除搜索">×</button></span>`);
+        chips.push(`<span class="chip">搜索 / Search：${escapeHtml(state.query)} <button type="button" data-clear-query aria-label="清除搜索 / Clear search">×</button></span>`);
       }
       for (const filter of state.filters) {
-        chips.push(`<span class="chip">${escapeHtml(filter.label)} <button type="button" data-kind="${escapeHtml(filter.kind)}" data-value="${escapeHtml(filter.value)}" aria-label="移除筛选">×</button></span>`);
+        chips.push(`<span class="chip">${escapeHtml(filter.label)} <button type="button" data-kind="${escapeHtml(filter.kind)}" data-value="${escapeHtml(filter.value)}" aria-label="移除筛选 / Remove filter">×</button></span>`);
       }
       root.innerHTML = chips.join("");
       root.querySelectorAll("button[data-kind]").forEach((button) => {
@@ -1048,6 +1125,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
       if (clearQuery) {
         clearQuery.addEventListener("click", () => {
           state.query = "";
+          state.page = 1;
           document.getElementById("searchInput").value = "";
           render();
         });
@@ -1075,9 +1153,9 @@ _HTML_TEMPLATE = r"""<!doctype html>
       }
 
       const sections = [];
-      sections.push(renderSimpleFacet("内容类型", "content_type", typeCounts.entries(), contentTypeLabel));
-      sections.push(renderSimpleFacet("分析方式", "analysis_method", methodCounts.entries(), methodLabel));
-      sections.push(renderSimpleFacet("复核状态", "review", reviewCounts.entries(), reviewLabel));
+      sections.push(renderSimpleFacet("内容类型 / Content type", "content_type", typeCounts.entries(), contentTypeLabel));
+      sections.push(renderSimpleFacet("分析方式 / Analysis method", "analysis_method", methodCounts.entries(), methodLabel));
+      sections.push(renderSimpleFacet("复核状态 / Review status", "review", reviewCounts.entries(), reviewLabel));
       for (const [dimension, tags] of [...dimensions.entries()].sort((a, b) => dimensionLabel(a[0]).localeCompare(dimensionLabel(b[0])))) {
         sections.push(renderTagSection(dimension, tags.sort((a, b) => tagInfo(a).zh.localeCompare(tagInfo(b).zh)), tagCounts));
       }
@@ -1174,13 +1252,13 @@ _HTML_TEMPLATE = r"""<!doctype html>
     function renderList(records) {
       const list = document.getElementById("assetList");
       if (!records.length) {
-        list.innerHTML = `<li class="empty-state">没有匹配的文件</li>`;
+        list.innerHTML = `<li class="empty-state">没有匹配的文件 / No matching files</li>`;
         return;
       }
       list.innerHTML = records.map((record) => {
         const selected = record.path === state.selectedPath ? " is-selected" : "";
         const reviewClass = record.needs_human_review ? "review" : "ok";
-        const reviewText = record.needs_human_review ? "需要复核" : "已分析";
+        const reviewText = record.needs_human_review ? "需要复核 / Review" : "已分析 / Done";
         const tags = (record.tags || []).slice(0, 5).map(tagBadge).join("");
         return `<li>
           <button class="row${selected}" type="button" data-path="${escapeHtml(record.path)}">
@@ -1189,7 +1267,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
               <span class="badge ${reviewClass}">${reviewText}</span>
             </div>
             <div class="row-path">${escapeHtml(record.path)}</div>
-            <p class="row-summary">${escapeHtml(record.summary || "暂无摘要")}</p>
+            <p class="row-summary">${escapeHtml(record.summary || "暂无摘要 / No summary yet")}</p>
             <div class="tag-strip">${tags}</div>
           </button>
         </li>`;
@@ -1205,64 +1283,64 @@ _HTML_TEMPLATE = r"""<!doctype html>
     function renderDetail(record) {
       const panel = document.getElementById("detailPanel");
       if (!record) {
-        panel.innerHTML = `<div class="detail-empty">请选择一个文件</div>`;
+        panel.innerHTML = `<div class="detail-empty">请选择一个文件 / Select a file</div>`;
         return;
       }
       const tags = (record.tags || []).map(tagBadge).join("");
       const ruleTags = (record.rule_tags || []).map(tagBadge).join("");
       const keyPoints = (record.key_points || []).length
         ? `<ul class="points">${record.key_points.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}</ul>`
-        : `<p class="summary">暂无理解要点</p>`;
+        : `<p class="summary">暂无理解要点 / No key points yet</p>`;
       panel.innerHTML = `<div class="detail-body">
         <h2 class="detail-title">${escapeHtml(record.title || record.path)}</h2>
         <div class="detail-path">${escapeHtml(record.path)}</div>
         <div class="detail-actions">
-          <button class="ghost-button" type="button" id="copyPath">复制路径</button>
+          <button class="ghost-button" type="button" id="copyPath">复制路径 / Copy path</button>
         </div>
 
         <section class="detail-section">
-          <h3>摘要</h3>
-          <p class="summary">${escapeHtml(record.summary || "暂无摘要")}</p>
+          <h3>摘要 / Summary</h3>
+          <p class="summary">${escapeHtml(record.summary || "暂无摘要 / No summary yet")}</p>
         </section>
 
         <section class="detail-section">
-          <h3>标签</h3>
-          <div class="tag-strip">${tags || "<span class=\"badge\">暂无标签</span>"}</div>
+          <h3>标签 / Tags</h3>
+          <div class="tag-strip">${tags || "<span class=\"badge\">暂无标签 / No tags</span>"}</div>
         </section>
 
         <section class="detail-section">
-          <h3>基本信息</h3>
+          <h3>基本信息 / Basic info</h3>
           <dl class="kv">
-            <dt>内容类型</dt><dd>${escapeHtml(contentTypeLabel(record.content_type))} <code>${escapeHtml(record.content_type)}</code></dd>
-            <dt>分析方式</dt><dd>${escapeHtml(methodLabel(record.analysis_method))} <code>${escapeHtml(record.analysis_method)}</code></dd>
-            <dt>置信度</dt><dd>${Number(record.confidence || 0).toFixed(2)}</dd>
-            <dt>复核状态</dt><dd>${escapeHtml(record.needs_human_review ? "需要复核" : "暂不复核")} <code>${escapeHtml(record.review_reason || "")}</code></dd>
-            <dt>向量许可</dt><dd>${record.embedding_allowed ? "允许" : "不允许"}</dd>
-            <dt>解析器</dt><dd><code>${escapeHtml(record.parser || "unknown")}</code></dd>
-            <dt>扩展名</dt><dd><code>${escapeHtml(record.extension || "")}</code></dd>
-            <dt>字数估算</dt><dd>${Number(record.word_count || 0).toLocaleString("zh-CN")}</dd>
-            <dt>字符数</dt><dd>${Number(record.char_count || 0).toLocaleString("zh-CN")}</dd>
-            <dt>行数</dt><dd>${Number(record.line_count || 0).toLocaleString("zh-CN")}</dd>
+            <dt>内容类型 / Type</dt><dd>${escapeHtml(contentTypeLabel(record.content_type))} <code>${escapeHtml(record.content_type)}</code></dd>
+            <dt>分析方式 / Method</dt><dd>${escapeHtml(methodLabel(record.analysis_method))} <code>${escapeHtml(record.analysis_method)}</code></dd>
+            <dt>置信度 / Confidence</dt><dd>${Number(record.confidence || 0).toFixed(2)}</dd>
+            <dt>复核状态 / Review</dt><dd>${escapeHtml(record.needs_human_review ? "需要复核 / Review" : "暂不复核 / No review")} <code>${escapeHtml(record.review_reason || "")}</code></dd>
+            <dt>向量许可 / Embedding</dt><dd>${record.embedding_allowed ? "允许 / Allowed" : "不允许 / Blocked"}</dd>
+            <dt>解析器 / Parser</dt><dd><code>${escapeHtml(record.parser || "unknown")}</code></dd>
+            <dt>扩展名 / Extension</dt><dd><code>${escapeHtml(record.extension || "")}</code></dd>
+            <dt>字数估算 / Words</dt><dd>${Number(record.word_count || 0).toLocaleString("zh-CN")}</dd>
+            <dt>字符数 / Characters</dt><dd>${Number(record.char_count || 0).toLocaleString("zh-CN")}</dd>
+            <dt>行数 / Lines</dt><dd>${Number(record.line_count || 0).toLocaleString("zh-CN")}</dd>
           </dl>
         </section>
 
         <section class="detail-section">
-          <h3>理解要点</h3>
+          <h3>理解要点 / Key points</h3>
           ${keyPoints}
         </section>
 
         <section class="detail-section">
-          <h3>规则版保留结果</h3>
+          <h3>规则版保留结果 / Rule fallback</h3>
           <dl class="kv">
-            <dt>规则标题</dt><dd>${escapeHtml(record.rule_title || "暂无")}</dd>
-            <dt>规则摘要</dt><dd>${escapeHtml(record.rule_summary || "暂无")}</dd>
-            <dt>规则标签</dt><dd><div class="tag-strip">${ruleTags || "<span class=\"badge\">暂无</span>"}</div></dd>
+            <dt>规则标题 / Rule title</dt><dd>${escapeHtml(record.rule_title || "暂无 / None")}</dd>
+            <dt>规则摘要 / Rule summary</dt><dd>${escapeHtml(record.rule_summary || "暂无 / None")}</dd>
+            <dt>规则标签 / Rule tags</dt><dd><div class="tag-strip">${ruleTags || "<span class=\"badge\">暂无 / None</span>"}</div></dd>
           </dl>
         </section>
 
         <section class="detail-section">
-          <h3>模型说明</h3>
-          <p class="summary">${escapeHtml(record.model_notes || "暂无模型说明")}</p>
+          <h3>模型说明 / Model notes</h3>
+          <p class="summary">${escapeHtml(record.model_notes || "暂无模型说明 / No model notes")}</p>
         </section>
       </div>`;
 
@@ -1271,11 +1349,11 @@ _HTML_TEMPLATE = r"""<!doctype html>
         copyPath.addEventListener("click", async () => {
           try {
             await navigator.clipboard.writeText(record.path);
-            copyPath.textContent = "已复制";
-            window.setTimeout(() => { copyPath.textContent = "复制路径"; }, 900);
+            copyPath.textContent = "已复制 / Copied";
+            window.setTimeout(() => { copyPath.textContent = "复制路径 / Copy path"; }, 900);
           } catch (_error) {
-            copyPath.textContent = "复制失败";
-            window.setTimeout(() => { copyPath.textContent = "复制路径"; }, 900);
+            copyPath.textContent = "复制失败 / Copy failed";
+            window.setTimeout(() => { copyPath.textContent = "复制路径 / Copy path"; }, 900);
           }
         });
       }
@@ -1302,10 +1380,25 @@ _HTML_TEMPLATE = r"""<!doctype html>
 
     document.getElementById("searchInput").addEventListener("input", (event) => {
       state.query = event.target.value;
+      state.page = 1;
       render();
     });
     document.getElementById("sortSelect").addEventListener("change", (event) => {
       state.sort = event.target.value;
+      state.page = 1;
+      render();
+    });
+    document.getElementById("pageSizeSelect").addEventListener("change", (event) => {
+      state.pageSize = Number(event.target.value) || 10;
+      state.page = 1;
+      render();
+    });
+    document.getElementById("prevPage").addEventListener("click", () => {
+      state.page = Math.max(1, state.page - 1);
+      render();
+    });
+    document.getElementById("nextPage").addEventListener("click", () => {
+      state.page += 1;
       render();
     });
     document.getElementById("clearFilters").addEventListener("click", clearFilters);

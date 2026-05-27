@@ -36,7 +36,7 @@ PFKB is meant to be a knowledge governance layer over the local filesystem, not 
 - Real LLM/API analysis only receives privacy-gated extracted text; cloud mode also requires explicit allowed paths and risk acknowledgement.
 - `pfkb llm` for explaining local/cloud model policy and cloud-read boundaries.
 - `pfkb review` for human review lists covering unreadable, unsupported, low-confidence, or cloud-unauthorized files.
-- `pfkb html` for turning `knowledge-index.jsonl` into a local Chinese asset browser with a tag tree, filters, search, and file details.
+- `pfkb html` for turning `knowledge-index.jsonl` into a local Chinese/English asset browser with a tag tree, pagination, filters, search, and file details.
 - Direct text extraction is supported; MarkItDown is an optional parser dependency.
 
 ## Quick Start

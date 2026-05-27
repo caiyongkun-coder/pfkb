@@ -81,11 +81,21 @@ def test_render_knowledge_browser_html_uses_chinese_ui_and_embedded_data():
     html = render_knowledge_browser_html([_record()], tags_config=_tags_config(), source_path="analysis.jsonl")
 
     assert "PFKB 资产浏览" in html
+    assert "Asset browser" in html
     assert "标签树" in html
+    assert "Tag tree" in html
+    assert "Browse by hierarchy" in html
     assert "文件列表" in html
+    assert "File list" in html
     assert "文件详情" in html
+    assert "File details" in html
+    assert "每页 10 条 / 10 per page" in html
+    assert "上一页 / Prev" in html
+    assert "下一页 / Next" in html
     assert "搜索文件名、路径、摘要或标签" in html
     assert "需要复核" in html
+    assert "摘要 / Summary" in html
+    assert "基本信息 / Basic info" in html
     assert "隐私策略" in html
     assert "topic/privacy_policy" in html
 

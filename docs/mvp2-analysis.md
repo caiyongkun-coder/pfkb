@@ -70,7 +70,7 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 
 `pfkb html` 会额外读取上面的 JSONL，生成：
 
-- `knowledge-index.html`：中文资产浏览页，支持标签树、搜索、筛选、文件列表和详情面板。
+- `knowledge-index.html`：中英双语资产浏览页，支持标签树、搜索、筛选、分页文件列表和详情面板。
 
 ## 当前标签能力
 
