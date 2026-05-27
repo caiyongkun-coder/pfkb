@@ -32,7 +32,8 @@ PFKB is meant to be a knowledge governance layer over the local filesystem, not 
 - `pfkb extract` for files allowed by policy.
 - `pfkb extracts` for persisted extraction results and status counts.
 - Incremental extraction: unchanged successful sources are skipped by default, with `--force` and `--retry-failed` available.
-- `pfkb analyze` for local rule-based summaries, tags, and knowledge indexes from extracted text; `--method codex-mock` simulates a future API/LLM semantic pass.
+- `pfkb analyze` for local rule-based summaries, tags, and knowledge indexes from extracted text; `--method codex-mock`, `--method local-llm`, and `--method cloud-llm` are supported.
+- Real LLM/API analysis only receives privacy-gated extracted text; cloud mode also requires explicit allowed paths and risk acknowledgement.
 - `pfkb llm` for explaining local/cloud model policy and cloud-read boundaries.
 - `pfkb review` for human review lists covering unreadable, unsupported, low-confidence, or cloud-unauthorized files.
 - Direct text extraction is supported; MarkItDown is an optional parser dependency.
@@ -112,6 +113,12 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 # Explain local/cloud LLM privacy policy
 python -m pfkb llm --llm-config configs/llm.example.yaml
 
+# Use a local LLM such as Ollama. First copy and edit configs/llm.yaml: set llm.mode to local and local.enabled to true
+python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml
+
+# Use a cloud LLM. You must explicitly set cloud.enabled, risk_acknowledged, and allowed_paths
+python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml
+
 # Write the human review list
 python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
 ```
@@ -142,6 +149,7 @@ src/pfkb/
   tags.py                    Tag taxonomy parser
   parse.py                   Privacy-gated extraction pipeline
   analyze.py                 Local rule-based summaries, tags, and knowledge indexes
+  llm_client.py              Local/cloud LLM API client
   review.py                  Human review list builder
   llm_config.py              LLM policy config parser
   cli.py                     CLI entry point
@@ -195,6 +203,7 @@ Current tests cover:
 - Incremental extraction, forced reruns, and failed/skipped retry strategy.
 - Local rule-based content analysis, tags, and knowledge index outputs.
 - LLM policy explanation, cloud authorization boundaries, and human review list outputs.
+- Real LLM/API analysis entry points, cloud authorization gates, and JSON response parsing.
 
 ## Docs
 

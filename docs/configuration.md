@@ -66,3 +66,37 @@ dry-run 报告至少应展示：
 3. 再把桌面、文档、知识库收件箱等低风险目录加入 `allow`。
 4. 执行 dry-run，检查每个目录的处理动作和命中原因。
 5. 确认 dry-run 结果后再执行真实扫描。
+
+## LLM 配置
+
+`configs/llm.example.yaml` 控制内容理解阶段是否调用模型。默认是 `rules`，不会调用任何模型。
+
+本地 LLM 配置示例：
+
+```yaml
+llm:
+  mode: local
+local:
+  enabled: true
+  provider: ollama
+  model: qwen2.5:7b
+  endpoint: http://localhost:11434
+  allow_network_loopback_only: true
+```
+
+云端 LLM 配置示例：
+
+```yaml
+llm:
+  mode: cloud
+cloud:
+  enabled: true
+  provider: openai
+  model: ""
+  api_key_env: OPENAI_API_KEY
+  risk_acknowledged: true
+  allowed_paths:
+    - C:/Users/<user>/Documents/PublicNotes
+```
+
+云端模式只会处理同时满足这些条件的文件：已经通过隐私策略、已经本地提取正文、`access_policy` 在 `allowed_policies` 内、路径位于 `allowed_paths` 下，并且用户已确认风险。未通过检查的文件不会上传，会被标记为需要人工处理。

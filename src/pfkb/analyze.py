@@ -8,11 +8,15 @@ from typing import Any, Iterable
 import json
 import re
 
+from .llm_client import ConfiguredLLMClient, LLMAnalysisRequest, LLMAnalyzer, LLMClientError
+from .llm_config import cloud_allowed_for_path, local_allowed_for_config
 from .semantic import infer_semantic_understanding
 
 
 SUMMARY_MAX_CHARS = 360
 DEFAULT_MAX_TEXT_CHARS = 200_000
+LLM_ANALYSIS_METHODS = {"local-llm", "cloud-llm"}
+SUPPORTED_ANALYSIS_METHODS = {"rules", "codex-mock", *LLM_ANALYSIS_METHODS}
 
 CODE_EXTENSIONS = {
     ".py",
@@ -85,7 +89,12 @@ def analyze_extract_records(
     *,
     max_text_chars: int = DEFAULT_MAX_TEXT_CHARS,
     analysis_method: str = "rules",
+    llm_config: dict[str, Any] | None = None,
+    llm_client: LLMAnalyzer | None = None,
+    allowed_tags: list[str] | None = None,
 ) -> list[AnalysisResult]:
+    if analysis_method not in SUPPORTED_ANALYSIS_METHODS:
+        raise ValueError(f"unsupported analysis method: {analysis_method}")
     results: list[AnalysisResult] = []
     for record in records:
         if not _is_analyzable(record):
@@ -95,6 +104,9 @@ def analyze_extract_records(
                 record,
                 max_text_chars=max_text_chars,
                 analysis_method=analysis_method,
+                llm_config=llm_config,
+                llm_client=llm_client,
+                allowed_tags=allowed_tags,
             )
         )
     return results
@@ -105,8 +117,11 @@ def analyze_extract_record(
     *,
     max_text_chars: int = DEFAULT_MAX_TEXT_CHARS,
     analysis_method: str = "rules",
+    llm_config: dict[str, Any] | None = None,
+    llm_client: LLMAnalyzer | None = None,
+    allowed_tags: list[str] | None = None,
 ) -> AnalysisResult:
-    if analysis_method not in {"rules", "codex-mock"}:
+    if analysis_method not in SUPPORTED_ANALYSIS_METHODS:
         raise ValueError(f"unsupported analysis method: {analysis_method}")
 
     output_path = Path(str(record.get("output_path") or ""))
@@ -135,6 +150,43 @@ def analyze_extract_record(
                 rule_title=rule_title,
                 rule_summary=rule_summary,
                 rule_tags=rule_tags,
+            )
+            title = semantic.title
+            summary = semantic.summary
+            tags = semantic.tags
+            confidence = semantic.confidence
+            review_reason = semantic.review_reason
+            needs_human_review = semantic.needs_human_review
+            key_points = semantic.key_points
+            model_notes = semantic.model_notes
+        elif analysis_method in LLM_ANALYSIS_METHODS:
+            gate_reason = _llm_gate_reason(source_path, record, analysis_method, llm_config)
+            if gate_reason:
+                return _skipped_analysis_result(
+                    record,
+                    output_path=output_path,
+                    analyzed_at=analyzed_at,
+                    analysis_method=analysis_method,
+                    title=rule_title,
+                    summary=rule_summary,
+                    tags=rule_tags,
+                    content_type=content_type,
+                    extension=extension,
+                    parser=parser,
+                    text=text,
+                    review_reason=gate_reason,
+                )
+            active_client = llm_client or ConfiguredLLMClient(llm_config, method=analysis_method)
+            semantic = active_client.analyze(
+                LLMAnalysisRequest(
+                    path=source_path,
+                    text=text,
+                    content_type=content_type,
+                    rule_title=rule_title,
+                    rule_summary=rule_summary,
+                    rule_tags=rule_tags,
+                    allowed_tags=allowed_tags or [],
+                )
             )
             title = semantic.title
             summary = semantic.summary
@@ -177,6 +229,7 @@ def analyze_extract_record(
             model_notes=model_notes,
         )
     except Exception as exc:  # noqa: BLE001 - analysis manifest should capture failures.
+        review_reason = "llm_api_error" if isinstance(exc, LLMClientError) else "analysis_error"
         return AnalysisResult(
             path=source_path,
             output_path=str(output_path),
@@ -197,9 +250,72 @@ def analyze_extract_record(
             analysis_method=analysis_method,
             confidence=0.0,
             needs_human_review=True,
-            review_reason="analysis_error",
+            review_reason=review_reason,
             error=str(exc),
         )
+
+
+def _llm_gate_reason(
+    source_path: str,
+    record: dict[str, Any],
+    analysis_method: str,
+    llm_config: dict[str, Any] | None,
+) -> str | None:
+    if analysis_method == "local-llm":
+        return None if local_allowed_for_config(llm_config) else "local_llm_not_enabled"
+    if analysis_method == "cloud-llm":
+        access_policy = str(record.get("access_policy") or "").strip()
+        if not access_policy:
+            return "cloud_missing_policy_context"
+        if not cloud_allowed_for_path(source_path, access_policy, llm_config):
+            return "cloud_not_authorized"
+        return None
+    return None
+
+
+def _skipped_analysis_result(
+    record: dict[str, Any],
+    *,
+    output_path: Path,
+    analyzed_at: str,
+    analysis_method: str,
+    title: str,
+    summary: str,
+    tags: list[str],
+    content_type: str,
+    extension: str,
+    parser: str,
+    text: str,
+    review_reason: str,
+) -> AnalysisResult:
+    source_path = str(record.get("path") or "")
+    return AnalysisResult(
+        path=source_path,
+        output_path=str(output_path),
+        status="skipped",
+        title=title,
+        summary=summary,
+        tags=tags,
+        primary_tag=tags[0] if tags else content_type,
+        content_type=content_type,
+        extension=extension,
+        parser=parser,
+        embedding_allowed=bool(record.get("embedding_allowed")),
+        char_count=len(text),
+        word_count=count_words(text),
+        line_count=text.count("\n") + (1 if text else 0),
+        analyzed_at=analyzed_at,
+        source_extract_status=str(record.get("status") or ""),
+        analysis_method=analysis_method,
+        confidence=0.0,
+        needs_human_review=True,
+        review_reason=review_reason,
+        rule_title=title,
+        rule_summary=summary,
+        rule_tags=tags,
+        key_points=None,
+        model_notes="LLM 未调用：当前文件没有通过本地/云端模型读取授权检查。",
+    )
 
 
 def classify_content_type(path: str, extension: str | None = None) -> str:
@@ -317,11 +433,19 @@ def write_knowledge_index_md(results: list[AnalysisResult], path: str | Path) ->
     for result in ok_results:
         by_type[result.content_type].append(result)
 
-    method_note = (
-        "当前版本是模拟 API/LLM 语义版：`codex-mock` 不调用外部服务，用来验证“模型理解、总结、打标签”的输出形态；粗标签仍会保留在每条记录里，方便和规则版对比。"
-        if semantic_mode
-        else "当前版本是全本地规则版：标题来自 Markdown 标题或文件名，摘要来自正文前几段，标签来自路径、扩展名和关键词匹配；还没有使用大模型做深度理解。"
-    )
+    methods = {result.analysis_method for result in results if result.status != "error"}
+    if methods & LLM_ANALYSIS_METHODS:
+        method_note = (
+            "当前版本包含真实 LLM/API 语义理解结果：模型只接收已经通过隐私策略和提取流程的文本；"
+            "`cloud-llm` 还必须通过云端 allowed_paths 和风险确认。粗标签仍会保留，方便审计和回退。"
+        )
+    elif semantic_mode:
+        method_note = (
+            "当前版本是模拟 API/LLM 语义版：`codex-mock` 不调用外部服务，用来验证“模型理解、总结、打标签”的输出形态；"
+            "粗标签仍会保留在每条记录里，方便和规则版对比。"
+        )
+    else:
+        method_note = "当前版本是全本地规则版：标题来自 Markdown 标题或文件名，摘要来自正文前几段，标签来自路径、扩展名和关键词匹配；还没有使用大模型做深度理解。"
     lines = [
         "# 知识索引",
         "",
@@ -334,6 +458,7 @@ def write_knowledge_index_md(results: list[AnalysisResult], path: str | Path) ->
         "## 概览",
         "",
         f"- 已分析文件：{len(ok_results)}",
+        f"- 跳过分析：{sum(1 for result in results if result.status == 'skipped')}",
         f"- 分析错误：{sum(1 for result in results if result.status == 'error')}",
     ]
     if ok_results:
@@ -354,6 +479,8 @@ def write_knowledge_index_md(results: list[AnalysisResult], path: str | Path) ->
             "- 这是给人先快速盘点文件的索引，不是最终结论。",
             "- `analysis_method: rules` 表示只使用文件路径、扩展名、标题和关键词规则。",
             "- `analysis_method: codex-mock` 表示这是模拟 API/LLM 语义版，用来先验证真实模型接入后的数据结构和阅读体验。",
+            "- `analysis_method: local-llm` 表示文件提取文本已发送给本机模型服务，例如 Ollama 或 LM Studio。",
+            "- `analysis_method: cloud-llm` 表示文件提取文本已在显式授权后发送给云端 API；未授权文件会在 manifest 中标记为 skipped。",
             "- 语义版会保留 `保留粗标签` 和 `规则版摘要`，这样可以直接比较模型理解和规则粗标签的差异。",
             "- `规则/语义置信度` 不是最终真理，只表示当前方法掌握的线索是否足够清楚；低分文件建议进入人工待整理清单。",
             "- `需要人工复核` 为“是”时，代表系统不确定文件真实主题，后续可以由用户、本地 LLM 或显式授权的云端 LLM 复核。",
@@ -434,7 +561,7 @@ def write_tag_index_md(results: list[AnalysisResult], path: str | Path) -> None:
         "",
         "本文件按标签反向列出文件，方便人从主题入口逐层查看。",
         "",
-        "当前标签仍然是规则版标签：中文名称方便人阅读，括号中的英文 key 方便 agent 或脚本稳定引用。",
+        "当前标签可能来自规则、模拟语义层或真实 LLM/API；中文名称方便人阅读，括号中的英文 key 方便 agent 或脚本稳定引用。",
         "",
     ]
     for tag in sorted(by_tag):
@@ -671,6 +798,12 @@ def _review_reason_label(reason: str) -> str:
         "analysis_error": "分析过程出错，需要人工检查",
         "codex_mock_low_signal": "模拟语义层线索不足，需要人工复核",
         "codex_mock_semantic_reviewed": "模拟语义层已经给出较明确判断",
+        "cloud_missing_policy_context": "缺少原始隐私策略上下文，禁止发送云端",
+        "cloud_not_authorized": "云端 LLM 未获得此路径授权",
+        "llm_api_error": "LLM API 调用失败或返回格式不可用",
+        "llm_low_confidence": "LLM 语义判断置信度不足，需要人工复核",
+        "llm_semantic_reviewed": "LLM 已给出较明确的语义判断",
+        "local_llm_not_enabled": "本地 LLM 未启用或 endpoint 不是本机地址",
         "rules_low_signal": "规则线索不足，无法可靠判断主题",
         "rules_only_needs_semantic_review": "规则版结果需要语义复核",
         "rules_only_no_llm": "没有配置 LLM，只能给出规则版结果",

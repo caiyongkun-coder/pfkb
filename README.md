@@ -32,7 +32,8 @@ PFKB 想做的是本地文件系统上的“知识治理层”，而不是又一
 - 提供 `pfkb extract`，只对策略允许读取的文件执行提取。
 - 提供 `pfkb extracts`，查看持久化的提取结果和状态统计。
 - 支持增量提取：默认跳过源文件未变化的成功项，支持 `--force` 和 `--retry-failed`。
-- 提供 `pfkb analyze`，基于已提取文本生成本地规则版摘要、标签和知识索引；也支持 `--method codex-mock` 模拟未来 API/LLM 语义理解结果。
+- 提供 `pfkb analyze`，基于已提取文本生成本地规则版摘要、标签和知识索引；支持 `--method codex-mock`、`--method local-llm` 和 `--method cloud-llm`。
+- 真实 LLM/API 只读取隐私门控后的提取文本；云端模式还必须显式配置授权路径和风险确认。
 - 支持直接文本提取；MarkItDown 是可选解析依赖。
 
 ## 快速开始
@@ -110,6 +111,12 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 # 查看 LLM/云端隐私策略
 python -m pfkb llm --llm-config configs/llm.example.yaml
 
+# 使用本地 LLM，例如 Ollama。需要先复制并修改 configs/llm.yaml，把 llm.mode 设为 local，local.enabled 设为 true
+python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml
+
+# 使用云端 LLM。必须显式设置 cloud.enabled、risk_acknowledged 和 allowed_paths
+python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml
+
 # 生成人工待整理清单
 python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
 ```
@@ -140,6 +147,7 @@ src/pfkb/
   tags.py                    标签体系解析
   parse.py                   隐私门控后的提取管线
   analyze.py                 本地规则版摘要、标签和知识索引
+  llm_client.py              本地/云端 LLM API 客户端
   review.py                  人工待整理清单
   llm_config.py              LLM 策略配置解析
   cli.py                     CLI 入口
@@ -191,6 +199,7 @@ python -m pytest -q
 - extraction result SQLite 持久化和查询。
 - 增量提取、强制重跑和失败重试策略。
 - 本地规则版内容分析、标签和知识索引输出。
+- 真实 LLM/API 分析入口、云端授权门禁和 JSON 响应解析。
 
 ## 文档
 

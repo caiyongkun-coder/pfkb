@@ -47,6 +47,38 @@ cloud:
 
 `deny`、`metadata_only`、`no_embedding` 默认都禁止云端处理。
 
+## 真实 LLM/API 分析
+
+真实 API 模式已经接入 `pfkb analyze`：
+
+```powershell
+python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml
+python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml
+```
+
+它不会让 API 直接访问本地原始文件。流程是：
+
+```text
+隐私策略通过 -> 本地提取正文 -> LLM 授权门禁 -> 发送提取文本 -> 接收 JSON 结果
+```
+
+本地模式要求：
+
+- `llm.mode: local`
+- `local.enabled: true`
+- 配置 `local.provider` 和 `local.model`
+- 默认 `local.endpoint` 必须是 loopback，例如 `http://localhost:11434`
+
+云端模式要求：
+
+- `llm.mode: cloud`
+- `cloud.enabled: true`
+- `cloud.risk_acknowledged: true`
+- 文件 `access_policy` 在 `cloud.allowed_policies` 内
+- 文件路径位于 `cloud.allowed_paths` 下
+
+如果云端文件缺少原始隐私策略上下文，或没有位于授权目录内，分析结果会写成 `status: skipped`，不会调用 API。
+
 ## 人工待整理清单
 
 生成清单：
@@ -102,4 +134,4 @@ HTML 版优先支持这些交互：
 - `needs_human_review`
 - `review_reason`
 
-这些字段会被 `pfkb review` 用来生成待整理清单。后续接入本地 LLM 时，可以把 `analysis_method` 改成 `local_llm`，并把置信度和复核原因更新得更准确。
+这些字段会被 `pfkb review` 用来生成待整理清单。真实 LLM 模式会把 `analysis_method` 写成 `local-llm` 或 `cloud-llm`，并把置信度、复核原因和模型说明写入同一套输出文件。

@@ -31,6 +31,13 @@ llm:
   model: ""
   endpoint: ""
 
+analysis:
+  # Maximum extracted text sent to an LLM for one file. Larger files should be
+  # chunked in a later milestone; this MVP sends one bounded prompt per file.
+  max_prompt_chars: 24000
+  timeout_seconds: 60
+  temperature: 0.1
+
 local:
   enabled: false
   provider: ollama
@@ -43,6 +50,7 @@ cloud:
   provider: openai
   model: ""
   endpoint: ""
+  api_key_env: OPENAI_API_KEY
   risk_acknowledged: false
 
   # Cloud processing is allowed only when all of these are true:

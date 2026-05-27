@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pfkb.cli import main as cli_main
 from pfkb.inventory import Inventory
-from pfkb.llm_config import cloud_allowed_for_path, describe_llm_config
+from pfkb.llm_config import cloud_allowed_for_path, describe_llm_config, endpoint_is_loopback, local_allowed_for_config
 from pfkb.parse import ExtractResult
 from pfkb.policy import AccessDecision
 from pfkb.review import build_review_items
@@ -95,6 +95,24 @@ def test_cloud_policy_requires_explicit_ack_and_allowed_path(tmp_path):
 
     blocked = {**config, "cloud": {**config["cloud"], "risk_acknowledged": False}}
     assert cloud_allowed_for_path(str(allowed_file), "allow", blocked) is False
+
+
+def test_local_llm_policy_requires_enabled_model_and_loopback_endpoint():
+    config = {
+        "llm": {"mode": "local"},
+        "local": {
+            "enabled": True,
+            "provider": "ollama",
+            "model": "qwen2.5:7b",
+            "endpoint": "http://localhost:11434",
+            "allow_network_loopback_only": True,
+        },
+    }
+
+    assert local_allowed_for_config(config) is True
+    assert endpoint_is_loopback("http://127.0.0.1:1234/v1") is True
+    blocked = {**config, "local": {**config["local"], "endpoint": "https://example.com"}}
+    assert local_allowed_for_config(blocked) is False
 
 
 def test_review_items_include_policy_blocks_extraction_gaps_and_rules_only(tmp_path):

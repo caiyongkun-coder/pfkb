@@ -298,6 +298,12 @@ def _severity_label(severity: str) -> str:
 def _analysis_review_reason_label(reason: str) -> str:
     labels = {
         "analysis_error": "分析过程出错，需要人工检查",
+        "cloud_missing_policy_context": "缺少原始隐私策略上下文，禁止发送云端",
+        "cloud_not_authorized": "云端 LLM 未获得此路径授权",
+        "llm_api_error": "LLM API 调用失败或返回格式不可用",
+        "llm_low_confidence": "LLM 语义判断置信度不足，需要人工复核",
+        "llm_semantic_reviewed": "LLM 已给出较明确的语义判断",
+        "local_llm_not_enabled": "本地 LLM 未启用或 endpoint 不是本机地址",
         "rules_low_signal": "规则线索不足，无法可靠判断主题",
         "rules_only_needs_semantic_review": "规则版结果需要语义复核",
         "rules_only_no_llm": "没有配置 LLM，只能给出规则版结果",

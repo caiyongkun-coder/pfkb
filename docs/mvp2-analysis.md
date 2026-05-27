@@ -2,7 +2,13 @@
 
 MVP2 的目标是把已经提取出的正文转成第一版知识索引。
 
-当前实现是全本地、规则版，不依赖大模型。它先提供稳定的基础能力：
+当前实现已经支持三层分析：
+
+- `rules`：全本地规则版，不依赖大模型。
+- `codex-mock`：本地模拟语义理解输出，用于开发对比。
+- `local-llm` / `cloud-llm`：把已经提取的文本交给本地或云端 LLM API。
+
+基础能力包括：
 
 - 从 `inventory.sqlite` 读取最新可分析的提取结果。
 - 只分析 `ok` 或 `up_to_date` 且有文本产物的记录。
@@ -33,6 +39,18 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 
 `codex-mock` 不调用外部服务，也不代表真实模型能力。它的作用是先固定未来 API 接入后的数据结构和阅读形态：语义摘要、语义标签、理解要点、模型说明，以及保留下来的规则粗标签。
 
+如果已经配置本地 LLM，例如 Ollama：
+
+```powershell
+python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml --tags-config configs/tags.example.yaml
+```
+
+如果要使用云端 API，必须先在 `configs/llm.yaml` 中显式设置 `llm.mode: cloud`、`cloud.enabled: true`、`cloud.risk_acknowledged: true` 和 `cloud.allowed_paths`。未授权文件不会上传，会在 `analysis-manifest.jsonl` 中标记为 `status: skipped`。
+
+```powershell
+python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml --tags-config configs/tags.example.yaml
+```
+
 ## 输出文件
 
 `pfkb analyze` 会输出：
@@ -50,7 +68,7 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 - 内容类型：`code`、`docs`、`config`、`test`、`document`、`file`。
 - 主题标签：`privacy`、`scan`、`extract`、`analysis`、`inventory`、`configuration`、`roots`、`cli`、`tests`、`docs`、`license`、`roadmap`。
 
-后续可以在这一层之后接本地 LLM，提升摘要质量、抽取主题层级、识别项目/人物/时间线，并生成 wiki 页面。
+真实 LLM 模式会继续使用 `configs/tags.example.yaml` 中的结构化标签，避免模型随意发明不可控标签。
 
 ## 模拟语义理解能力
 
@@ -64,6 +82,28 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 - `model_notes` 会说明这是模拟 API 结果，没有调用外部服务。
 
 这个模式用于开发和展示，不用于替代真实模型。后续接入本地 LLM 或云端 API 时，可以沿用这些字段。
+
+## 真实 LLM/API 模式
+
+真实 API 模式不是让模型直接读取本地文件，而是按顺序执行：
+
+```text
+scan 隐私判断 -> extract 本地提取文本 -> analyze 授权检查 -> LLM API -> 结构化 JSON -> 知识索引
+```
+
+模型请求中包含的是提取后的文本、文件路径、规则版摘要、规则版标签和允许使用的标签列表。模型必须返回 JSON object，核心字段包括：
+
+- `title`
+- `summary`
+- `model_tags`
+- `confidence`
+- `needs_human_review`
+- `review_reason`
+- `key_points`
+
+`local-llm` 要求 `llm.mode: local`、`local.enabled: true`，且默认只允许 loopback endpoint，例如 `http://localhost:11434`。
+
+`cloud-llm` 要求额外通过 `cloud.allowed_paths`、`allowed_policies`、`forbidden_policies` 和 `risk_acknowledged` 检查。`deny`、`metadata_only`、`no_embedding` 默认都不能进入云端。
 
 ## 复核字段
 

@@ -104,10 +104,12 @@ def build_parser() -> ArgumentParser:
     analyze.add_argument("--max-text-chars", type=int, default=200_000, help="Maximum text chars to inspect per file")
     analyze.add_argument(
         "--method",
-        choices=["rules", "codex-mock"],
+        choices=["rules", "codex-mock", "local-llm", "cloud-llm"],
         default="rules",
-        help="Analysis method: rules or a local mock of a future Codex/API semantic pass",
+        help="Analysis method: rules, codex-mock, local-llm, or cloud-llm",
     )
+    analyze.add_argument("--llm-config", default="configs/llm.example.yaml", help="LLM policy YAML")
+    analyze.add_argument("--tags-config", default="configs/tags.example.yaml", help="Tag taxonomy YAML")
     analyze.add_argument(
         "--compare-to",
         default=None,
@@ -360,10 +362,15 @@ def cmd_analyze(args) -> int:
     with Inventory(inventory_path) as inventory:
         latest = inventory.latest_analyzable_extracts_by_path()
     records = sorted(latest.values(), key=lambda record: str(record.get("path", "")))[: args.limit]
+    llm_config = load_llm_config(_optional_path(args.llm_config)) if args.method in {"local-llm", "cloud-llm"} else None
+    tag_config = load_tags_config(_optional_path(args.tags_config))
+    allowed_tags = [definition.id for definition in tag_definitions(tag_config)]
     results = analyze_extract_records(
         records,
         max_text_chars=args.max_text_chars,
         analysis_method=args.method,
+        llm_config=llm_config,
+        allowed_tags=allowed_tags,
     )
     outputs = write_analysis_outputs(results, args.out)
     if args.compare_to:
@@ -572,8 +579,19 @@ def _format_llm_summary(summary: dict) -> str:
         f"- purpose: {summary.get('purpose')}",
         f"- mode: {summary.get('mode')}",
         f"- provider: {summary.get('provider')}",
+        f"- model: {summary.get('model')}",
+        f"- analysis_max_prompt_chars: {summary.get('analysis_max_prompt_chars')}",
+        f"- analysis_timeout_seconds: {summary.get('analysis_timeout_seconds')}",
         f"- local_enabled: {str(summary.get('local_enabled')).lower()}",
+        f"- local_ready: {str(summary.get('local_ready')).lower()}",
+        f"- local_provider: {summary.get('local_provider')}",
+        f"- local_model: {summary.get('local_model')}",
+        f"- local_endpoint: {summary.get('local_endpoint')}",
+        f"- local_loopback_only: {str(summary.get('local_loopback_only')).lower()}",
         f"- cloud_enabled: {str(summary.get('cloud_enabled')).lower()}",
+        f"- cloud_provider: {summary.get('cloud_provider')}",
+        f"- cloud_model: {summary.get('cloud_model')}",
+        f"- cloud_api_key_env: {summary.get('cloud_api_key_env')}",
         f"- cloud_risk_acknowledged: {str(summary.get('cloud_risk_acknowledged')).lower()}",
         f"- cloud_allowed_paths: {len(summary.get('cloud_allowed_paths') or [])}",
     ]

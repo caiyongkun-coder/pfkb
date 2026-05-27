@@ -8,6 +8,7 @@ from pathlib import Path
 from pfkb.analyze import analyze_extract_records, classify_content_type, infer_tags
 from pfkb.cli import main as cli_main
 from pfkb.inventory import Inventory
+from pfkb.llm_client import LLMAnalysisRequest, LLMAnalysisResponse
 from pfkb.parse import ExtractResult
 
 
@@ -42,6 +43,24 @@ def _run_cli(argv: list[str]) -> tuple[int, str, str]:
         else:
             code = int(result)
     return code, stdout.getvalue(), stderr.getvalue()
+
+
+class FakeLLMClient:
+    def __init__(self) -> None:
+        self.requests: list[LLMAnalysisRequest] = []
+
+    def analyze(self, request_data: LLMAnalysisRequest) -> LLMAnalysisResponse:
+        self.requests.append(request_data)
+        return LLMAnalysisResponse(
+            title="模型理解后的标题",
+            summary="模型理解后的中文摘要。",
+            tags=["topic/privacy_policy", "document/note"],
+            confidence=0.91,
+            needs_human_review=False,
+            review_reason="llm_semantic_reviewed",
+            key_points=["识别了正文主题", "保留了规则标签用于审计"],
+            model_notes="fake llm fixture",
+        )
 
 
 def test_analyze_extract_records_generates_summary_tags_and_counts(tmp_path):
@@ -115,6 +134,122 @@ def test_codex_mock_analysis_preserves_rule_tags_and_adds_semantic_fields(tmp_pa
     assert "topic/human_review" in result.tags
     assert result.key_points
     assert result.model_notes and "codex-mock" in result.model_notes
+
+
+def test_local_llm_analysis_uses_extracted_text_and_fake_client(tmp_path):
+    source = tmp_path / "notes.md"
+    output = tmp_path / "extract" / "notes.md"
+    output.parent.mkdir()
+    output.write_text("# 隐私配置\n\n这里只是测试正文，不读取原始文件。", encoding="utf-8")
+    fake = FakeLLMClient()
+
+    results = analyze_extract_records(
+        [
+            {
+                "path": str(source),
+                "output_path": str(output),
+                "status": "ok",
+                "parser": "direct_text",
+                "embedding_allowed": True,
+            }
+        ],
+        analysis_method="local-llm",
+        llm_config={
+            "llm": {"mode": "local"},
+            "local": {
+                "enabled": True,
+                "provider": "ollama",
+                "model": "qwen2.5:7b",
+                "endpoint": "http://localhost:11434",
+            },
+        },
+        llm_client=fake,
+        allowed_tags=["topic/privacy_policy", "document/note"],
+    )
+
+    result = results[0]
+    assert result.status == "ok"
+    assert result.analysis_method == "local-llm"
+    assert result.title == "模型理解后的标题"
+    assert result.tags == ["topic/privacy_policy", "document/note"]
+    assert result.review_reason == "llm_semantic_reviewed"
+    assert fake.requests and "测试正文" in fake.requests[0].text
+    assert fake.requests[0].allowed_tags == ["topic/privacy_policy", "document/note"]
+
+
+def test_cloud_llm_skips_without_policy_context_and_does_not_call_client(tmp_path):
+    source = tmp_path / "allowed" / "notes.md"
+    output = tmp_path / "extract" / "notes.md"
+    output.parent.mkdir()
+    output.write_text("# Cloud\n\nfixture", encoding="utf-8")
+    fake = FakeLLMClient()
+
+    results = analyze_extract_records(
+        [
+            {
+                "path": str(source),
+                "output_path": str(output),
+                "status": "ok",
+                "parser": "direct_text",
+                "embedding_allowed": True,
+            }
+        ],
+        analysis_method="cloud-llm",
+        llm_config={
+            "llm": {"mode": "cloud"},
+            "cloud": {
+                "enabled": True,
+                "risk_acknowledged": True,
+                "allowed_policies": ["allow"],
+                "forbidden_policies": ["deny", "metadata_only", "no_embedding"],
+                "allowed_paths": [(tmp_path / "allowed").as_posix()],
+            },
+        },
+        llm_client=fake,
+    )
+
+    result = results[0]
+    assert result.status == "skipped"
+    assert result.review_reason == "cloud_missing_policy_context"
+    assert fake.requests == []
+
+
+def test_cloud_llm_requires_allowed_path_before_calling_client(tmp_path):
+    source = tmp_path / "allowed" / "notes.md"
+    output = tmp_path / "extract" / "notes.md"
+    output.parent.mkdir(parents=True)
+    output.write_text("# Cloud\n\nfixture", encoding="utf-8")
+    fake = FakeLLMClient()
+
+    results = analyze_extract_records(
+        [
+            {
+                "path": str(source),
+                "output_path": str(output),
+                "status": "ok",
+                "parser": "direct_text",
+                "embedding_allowed": True,
+                "access_policy": "allow",
+            }
+        ],
+        analysis_method="cloud-llm",
+        llm_config={
+            "llm": {"mode": "cloud"},
+            "cloud": {
+                "enabled": True,
+                "risk_acknowledged": True,
+                "allowed_policies": ["allow"],
+                "forbidden_policies": ["deny", "metadata_only", "no_embedding"],
+                "allowed_paths": [(tmp_path / "allowed").as_posix()],
+            },
+        },
+        llm_client=fake,
+        allowed_tags=["topic/privacy_policy", "document/note"],
+    )
+
+    assert results[0].status == "ok"
+    assert results[0].analysis_method == "cloud-llm"
+    assert len(fake.requests) == 1
 
 
 def test_classification_and_tags_use_path_and_content():

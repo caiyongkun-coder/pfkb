@@ -302,7 +302,14 @@ class Inventory:
     def latest_analyzable_extracts_by_path(self) -> dict[str, dict]:
         rows = self.connection.execute(
             """
-            SELECT e.*
+            SELECT e.*,
+                   f.access_policy AS access_policy,
+                   f.policy_source AS policy_source,
+                   f.policy_reason AS policy_reason,
+                   f.is_read_allowed AS is_read_allowed,
+                   f.is_extract_allowed AS is_extract_allowed,
+                   f.is_index_allowed AS is_index_allowed,
+                   f.is_embedding_allowed AS is_embedding_allowed
             FROM extractions e
             JOIN (
                 SELECT path, MAX(id) AS max_id
@@ -311,6 +318,7 @@ class Inventory:
                   AND output_path IS NOT NULL
                 GROUP BY path
             ) latest ON latest.max_id = e.id
+            LEFT JOIN files f ON f.path = e.path
             """
         ).fetchall()
         return {str(row["path"]): _extract_row_to_dict(row) for row in rows}
@@ -347,4 +355,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
 def _extract_row_to_dict(row: sqlite3.Row) -> dict:
     data = dict(row)
     data["embedding_allowed"] = bool(data["embedding_allowed"])
+    for key in ("is_read_allowed", "is_extract_allowed", "is_index_allowed", "is_embedding_allowed"):
+        if key in data and data[key] is not None:
+            data[key] = bool(data[key])
     return data
