@@ -228,42 +228,51 @@ def write_knowledge_index_md(results: list[AnalysisResult], path: str | Path) ->
         by_type[result.content_type].append(result)
 
     lines = [
-        "# Knowledge Index",
+        "# 知识索引",
         "",
-        f"Generated at: {datetime.now(timezone.utc).isoformat()}",
+        "本文件由 `pfkb analyze` 生成，用来给人快速浏览“这批文件大概是什么”。",
         "",
-        "## Summary",
+        "当前版本是全本地规则版：标题来自 Markdown 标题或文件名，摘要来自正文前几段，标签来自路径、扩展名和关键词匹配；还没有使用大模型做深度理解。",
         "",
-        f"- analyzed: {len(ok_results)}",
-        f"- errors: {sum(1 for result in results if result.status == 'error')}",
+        f"生成时间：{datetime.now(timezone.utc).isoformat()}",
+        "",
+        "## 概览",
+        "",
+        f"- 已分析文件：{len(ok_results)}",
+        f"- 分析错误：{sum(1 for result in results if result.status == 'error')}",
     ]
     if ok_results:
         tag_counts = Counter(tag for result in ok_results for tag in result.tags)
         lines.append(
-            "- top_tags: "
+            "- 高频标签："
             + ", ".join(f"`{tag}` {count}" for tag, count in tag_counts.most_common(10))
         )
 
     for content_type in sorted(by_type):
-        lines.extend(["", f"## {content_type.title()}", ""])
+        lines.extend(["", f"## {_content_type_label(content_type)}", ""])
         for result in sorted(by_type[content_type], key=lambda item: item.path.lower()):
             tags = " ".join(f"`{tag}`" for tag in result.tags)
+            embedding = "是" if result.embedding_allowed else "否"
             lines.extend(
                 [
                     f"### {result.title}",
                     "",
-                    f"- path: `{result.path}`",
-                    f"- tags: {tags}",
-                    f"- words: {result.word_count}",
+                    f"- 原始路径：`{result.path}`",
+                    f"- 内容类型：`{result.content_type}`",
+                    f"- 标签：{tags}",
+                    f"- 估算字数：{result.word_count}",
+                    f"- 允许向量化：{embedding}",
                     "",
-                    result.summary or "_No summary generated._",
+                    "摘要：",
+                    "",
+                    result.summary or "_暂未生成摘要。_",
                     "",
                 ]
             )
 
     errors = [result for result in results if result.status == "error"]
     if errors:
-        lines.extend(["", "## Errors", ""])
+        lines.extend(["", "## 分析错误", ""])
         for result in errors:
             lines.append(f"- `{result.path}`: {result.error}")
     Path(path).write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
@@ -276,7 +285,12 @@ def write_tag_index_md(results: list[AnalysisResult], path: str | Path) -> None:
         for tag in result.tags:
             by_tag[tag].append(result)
 
-    lines = ["# Tag Index", ""]
+    lines = [
+        "# 标签索引",
+        "",
+        "本文件按标签反向列出文件，方便人从主题入口逐层查看。",
+        "",
+    ]
     for tag in sorted(by_tag):
         lines.extend(["", f"## {tag}", ""])
         for result in sorted(by_tag[tag], key=lambda item: item.path.lower()):
@@ -334,3 +348,16 @@ def _dedupe(values: Iterable[str]) -> list[str]:
         seen.add(normalized)
         result.append(normalized)
     return result
+
+
+def _content_type_label(content_type: str) -> str:
+    labels = {
+        "code": "代码",
+        "config": "配置",
+        "docs": "项目文档",
+        "document": "文档",
+        "test": "测试",
+        "file": "文件",
+        "unknown": "未知",
+    }
+    return labels.get(content_type, content_type)

@@ -131,7 +131,13 @@ def test_analyze_cli_writes_knowledge_index_outputs(tmp_path):
     assert records[0]["title"] == "Demo Knowledge Base"
     assert "docs" in records[0]["tags"]
     assert "extract" in records[0]["tags"]
-    assert "failed.md" not in index_md.read_text(encoding="utf-8")
+    index_text = index_md.read_text(encoding="utf-8")
+    assert "# 知识索引" in index_text
+    assert "当前版本是全本地规则版" in index_text
+    assert "原始路径" in index_text
+    assert "摘要：" in index_text
+    assert "failed.md" not in index_text
+    assert "# 标签索引" in tag_index.read_text(encoding="utf-8")
 
 
 def test_latest_analyzable_extracts_prefers_latest_usable_record(tmp_path):
