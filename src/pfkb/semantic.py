@@ -20,97 +20,97 @@ class SemanticUnderstanding:
 
 TOPICS = [
     (
-        "privacy_policy",
+        "topic/privacy_policy",
         "隐私策略",
         ("privacy", "隐私", "deny", "metadata_only", "no_embedding", "access_policy"),
         "定义哪些文件可以读取、只能记录元数据、禁止向量化或完全跳过。",
     ),
     (
-        "llm_policy",
+        "topic/llm_policy",
         "LLM 策略",
         ("llm", "cloud", "local", "risk_acknowledged", "allowed_paths", "model"),
         "控制内容理解阶段是否使用规则、本地模型或云端模型，并约束云端授权范围。",
     ),
     (
-        "human_review",
+        "topic/human_review",
         "人工复核",
         ("review", "human-review", "needs_human_review", "待整理", "人工"),
         "把系统无法可靠理解、提取或发送云端的文件交给用户确认。",
     ),
     (
-        "semantic_analysis",
+        "topic/semantic_analysis",
         "内容理解",
         ("analyze", "analysis", "knowledge-index", "tag-index", "summary", "confidence", "摘要", "标签"),
         "把已提取正文整理成摘要、主题标签、置信度和知识索引。",
     ),
     (
-        "content_extraction",
+        "topic/content_extraction",
         "正文提取",
         ("extract", "extraction", "parse", "parser", "markitdown", "direct_text", "提取"),
         "在隐私策略允许的前提下把文件内容转成可分析文本。",
     ),
     (
-        "scan_reporting",
+        "topic/scan_reporting",
         "扫描报告",
         ("report", "write_scan_plan", "write_access_log", "summarize_by_policy", "访问日志"),
         "把扫描结果、策略命中和访问决策整理成人类可读报告与机器日志。",
     ),
     (
-        "inventory_db",
+        "topic/inventory_db",
         "文件清单数据库",
         ("inventory", "sqlite", "list_files", "upsert", "extractions"),
         "持久化扫描结果、提取状态和后续查询所需的文件元数据。",
     ),
     (
-        "scan_planning",
+        "topic/scan_planning",
         "扫描计划",
         ("scan", "dry-run", "access-log", "scan-plan", "follow_symlinks"),
         "先生成不读取正文的扫描计划和访问日志，避免一上来触碰敏感内容。",
     ),
     (
-        "scan_roots",
+        "topic/scan_roots",
         "扫描目录",
         ("roots", "documents", "downloads", "desktop", "onedrive", "推荐扫描目录"),
         "描述个人文件优先扫描的目录来源、风险等级和启用状态。",
     ),
     (
-        "cli_workflow",
+        "topic/cli_workflow",
         "命令行流程",
         ("argparse", "subparsers", "cmd_", "python -m pfkb", "command"),
         "把扫描、提取、分析、复核等步骤串成可执行命令。",
     ),
     (
-        "test_coverage",
+        "topic/test_coverage",
         "测试覆盖",
         ("pytest", "assert", "fixture", "tmp_path", "test_"),
         "验证扫描、提取、分析、配置和复核流程不会回退。",
     ),
     (
-        "project_documentation",
+        "topic/project_documentation",
         "项目文档",
         ("readme", "docs", "guide", "mvp", "使用说明", "项目启动"),
         "向用户和协作者说明项目目标、使用方法、阶段边界和后续路线。",
     ),
     (
-        "open_source",
+        "topic/open_source",
         "开源治理",
         ("license", "apache", "github", "contributing", "开源"),
         "处理许可证、公开协作和项目发布相关信息。",
     ),
     (
-        "roadmap",
+        "topic/roadmap",
         "路线图",
         ("roadmap", "development_plan", "project_start", "milestone", "计划"),
         "记录阶段目标、难点拆分、后续能力和实现优先级。",
     ),
     (
-        "html_review_ui",
+        "topic/html_review_ui",
         "HTML 交互审阅",
         ("html", "knowledge-index.html", "human-review.html", "review-decisions", "交互"),
         "为大量文件准备可点击、可筛选、可记录决策的本地审阅界面。",
     ),
     (
-        "configuration",
+        "topic/configuration",
         "配置模板",
         ("config", "configuration", "yaml", "example", "enabled", "rules"),
         "提供可被人和 agent 共同理解、后续可个性化调整的配置结构。",
@@ -175,23 +175,23 @@ def _infer_topics(
                 score += 3
             if normalized in haystack:
                 score += 1
-        if topic_key == "test_coverage" and content_type == "test":
+        if topic_key == "topic/test_coverage" and content_type == "test":
             score += 3
-        if topic_key == "configuration" and content_type == "config":
+        if topic_key == "topic/configuration" and content_type == "config":
             score += 2
-        if topic_key == "project_documentation" and content_type == "docs":
+        if topic_key == "topic/project_documentation" and content_type == "docs":
             score += 2
-        if topic_key == "semantic_analysis" and "analyze" in lower_path:
+        if topic_key == "topic/semantic_analysis" and "analyze" in lower_path:
             score += 3
-        if topic_key == "human_review" and "review" in lower_path:
+        if topic_key == "topic/human_review" and "review" in lower_path:
             score += 3
-        if topic_key == "content_extraction" and "parse" in lower_path:
+        if topic_key == "topic/content_extraction" and "parse" in lower_path:
             score += 3
-        if topic_key == "scan_reporting" and "report" in lower_path:
+        if topic_key == "topic/scan_reporting" and "report" in lower_path:
             score += 3
-        if topic_key == "inventory_db" and "inventory" in lower_path:
+        if topic_key == "topic/inventory_db" and "inventory" in lower_path:
             score += 3
-        if topic_key == "cli_workflow" and "cli.py" in lower_path:
+        if topic_key == "topic/cli_workflow" and "cli.py" in lower_path:
             score += 3
         if score:
             scored.append((score, -index, topic))
@@ -307,12 +307,12 @@ def _config_keys(path: str, text: str) -> list[str]:
 
 def _content_semantic_tag(content_type: str) -> str:
     tags = {
-        "code": "source_code",
-        "config": "configuration_file",
-        "docs": "project_documentation",
-        "document": "document",
-        "test": "test_file",
-        "file": "file",
+        "code": "document/source_code",
+        "config": "document/configuration_file",
+        "docs": "document/project_documentation",
+        "document": "document/general",
+        "test": "document/test_file",
+        "file": "document/file",
     }
     return tags.get(content_type, content_type)
 

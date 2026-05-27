@@ -112,7 +112,7 @@ def test_codex_mock_analysis_preserves_rule_tags_and_adds_semantic_fields(tmp_pa
     assert result.analysis_method == "codex-mock"
     assert result.rule_tags
     assert "code" in result.rule_tags
-    assert "human_review" in result.tags
+    assert "topic/human_review" in result.tags
     assert result.key_points
     assert result.model_notes and "codex-mock" in result.model_notes
 

@@ -57,7 +57,7 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 `--method codex-mock` 会生成一份语义理解版索引：
 
 - `analysis_method` 会变成 `codex-mock`。
-- `tags` 会变成语义标签，例如 `privacy_policy`、`llm_policy`、`human_review`。
+- `tags` 会变成语义标签，例如 `topic/privacy_policy`、`topic/llm_policy`、`topic/human_review`。
 - `rule_tags` 会保留原来的规则粗标签。
 - `rule_summary` 会保留原来的规则摘要。
 - `key_points` 会记录模拟理解时抓到的代码符号、文档章节或配置字段。

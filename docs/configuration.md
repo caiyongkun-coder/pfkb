@@ -5,6 +5,9 @@ MVP0 的配置目标是隐私优先：先决定“能不能碰这个文件”，
 ## 配置文件
 
 - `configs/privacy.example.yaml`：用户隐私策略示例。建议复制为 `configs/privacy.yaml` 后再修改。
+- `configs/roots.example.yaml`：推荐扫描目录示例，用来初始化“从哪里开始盘点”。
+- `configs/tags.example.yaml`：标签体系示例，用来定义 collection、document、topic、workflow、sensitivity 等维度。
+- `configs/llm.example.yaml`：LLM 和云端读取边界示例。
 - `configs/excludes.default.yaml`：项目默认排除规则，用于过滤系统目录、开发噪声、危险扩展名、安装包、临时文件和缓存。
 
 路径建议统一使用 `/` 分隔符。Windows 路径可以写成 `C:/Users/<user>/Documents`，跨平台路径可以写成 `${USERPROFILE}/Documents`、`${HOME}/Documents` 或 `~/Documents`。glob 规则中 `**` 表示任意层级。

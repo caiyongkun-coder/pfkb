@@ -28,7 +28,7 @@ PFKB 想做的是本地文件系统上的“知识治理层”，而不是又一
 - 默认排除系统目录、开发噪声、危险扩展名、安装包、缓存和临时文件。
 - dry-run 扫描只遍历路径和元数据，不读取文件正文。
 - 输出 `scan-plan.md`、`access-log.jsonl` 和 `inventory.sqlite`。
-- 提供 `pfkb privacy`、`pfkb status`、`pfkb list`、`pfkb show`、`pfkb roots`。
+- 提供 `pfkb privacy`、`pfkb status`、`pfkb list`、`pfkb show`、`pfkb roots`、`pfkb tags`。
 - 提供 `pfkb extract`，只对策略允许读取的文件执行提取。
 - 提供 `pfkb extracts`，查看持久化的提取结果和状态统计。
 - 支持增量提取：默认跳过源文件未变化的成功项，支持 `--force` 和 `--retry-failed`。
@@ -50,6 +50,7 @@ New-Item -ItemType Directory -Force "$env:TEMP\pfkb-mvp0-smoke" | Out-Null
 python -m pfkb scan "$env:TEMP\pfkb-mvp0-smoke" --privacy configs/privacy.yaml --out data/smoke --max-entries 50
 python -m pfkb status --inventory data/smoke/inventory.sqlite --sources
 python -m pfkb list --inventory data/smoke/inventory.sqlite
+python -m pfkb tags --tags-config configs/tags.example.yaml --dimension topic
 python -m pfkb extract --inventory data/smoke/inventory.sqlite --out data/smoke-extract
 python -m pfkb extracts --inventory data/smoke/inventory.sqlite --stats
 python -m pfkb analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze
@@ -118,21 +119,29 @@ python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis da
 ```text
 configs/
   roots.example.yaml         推荐扫描目录示例
+  tags.example.yaml          标签体系示例
+  llm.example.yaml           LLM 和云端读取策略示例
   excludes.default.yaml      默认排除规则
   privacy.example.yaml       用户隐私策略示例
 docs/
   configuration.md           配置说明
   privacy-setup.md           隐私配置初始化和 AI 可读说明
   roots-setup.md             推荐扫描目录初始化说明
+  tags-taxonomy.md           标签体系说明
   mvp0-usage.md              MVP0 使用说明
+  mvp2-analysis.md           MVP2 内容分析说明
+  mvp2-review-llm.md         MVP2.1 LLM 策略与人工待整理清单
 src/pfkb/
   policy.py                  隐私策略引擎
   scan.py                    dry-run 扫描器
   inventory.py               SQLite inventory
   report.py                  scan-plan 和 access-log 输出
   roots.py                   推荐扫描目录发现
+  tags.py                    标签体系解析
   parse.py                   隐私门控后的提取管线
   analyze.py                 本地规则版摘要、标签和知识索引
+  review.py                  人工待整理清单
+  llm_config.py              LLM 策略配置解析
   cli.py                     CLI 入口
 tests/
   *.py                       pytest 规格测试
@@ -190,6 +199,7 @@ python -m pytest -q
 - [配置说明](docs/configuration.md)
 - [隐私配置初始化说明](docs/privacy-setup.md)
 - [推荐扫描目录配置说明](docs/roots-setup.md)
+- [标签体系说明](docs/tags-taxonomy.md)
 - [MVP0 使用说明](docs/mvp0-usage.md)
 - [MVP1 提取说明](docs/mvp1-extraction.md)
 - [MVP2 内容分析说明](docs/mvp2-analysis.md)

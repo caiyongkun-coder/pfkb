@@ -28,7 +28,7 @@ PFKB is meant to be a knowledge governance layer over the local filesystem, not 
 - Default excludes for system folders, developer noise, dangerous extensions, installers, caches, and temporary files.
 - Dry-run scanning that only traverses paths and metadata; it does not read file bodies.
 - Outputs `scan-plan.md`, `access-log.jsonl`, and `inventory.sqlite`.
-- CLI commands: `pfkb privacy`, `pfkb status`, `pfkb list`, `pfkb show`, `pfkb roots`.
+- CLI commands: `pfkb privacy`, `pfkb status`, `pfkb list`, `pfkb show`, `pfkb roots`, `pfkb tags`.
 - `pfkb extract` for files allowed by policy.
 - `pfkb extracts` for persisted extraction results and status counts.
 - Incremental extraction: unchanged successful sources are skipped by default, with `--force` and `--retry-failed` available.
@@ -52,6 +52,7 @@ New-Item -ItemType Directory -Force "$env:TEMP\pfkb-mvp0-smoke" | Out-Null
 python -m pfkb scan "$env:TEMP\pfkb-mvp0-smoke" --privacy configs/privacy.yaml --out data/smoke --max-entries 50
 python -m pfkb status --inventory data/smoke/inventory.sqlite --sources
 python -m pfkb list --inventory data/smoke/inventory.sqlite
+python -m pfkb tags --tags-config configs/tags.example.yaml --dimension topic
 python -m pfkb extract --inventory data/smoke/inventory.sqlite --out data/smoke-extract
 python -m pfkb extracts --inventory data/smoke/inventory.sqlite --stats
 python -m pfkb analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze
@@ -120,6 +121,7 @@ python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis da
 ```text
 configs/
   roots.example.yaml         Example recommended scan roots
+  tags.example.yaml          Example tag taxonomy
   llm.example.yaml           Example LLM and cloud-read policy
   excludes.default.yaml      Default exclude rules
   privacy.example.yaml       Example user privacy policy
@@ -127,6 +129,7 @@ docs/
   configuration.md           Configuration guide
   privacy-setup.md           Privacy setup and agent-readable policy guide
   roots-setup.md             Recommended scan roots setup guide
+  tags-taxonomy.md           Tag taxonomy guide
   mvp0-usage.md              MVP0 usage guide
   mvp2-analysis.md           MVP2 content analysis guide
   mvp2-review-llm.md         MVP2.1 LLM policy and human review guide
@@ -136,6 +139,7 @@ src/pfkb/
   inventory.py               SQLite inventory
   report.py                  scan-plan and access-log output
   roots.py                   Suggested scan root discovery
+  tags.py                    Tag taxonomy parser
   parse.py                   Privacy-gated extraction pipeline
   analyze.py                 Local rule-based summaries, tags, and knowledge indexes
   review.py                  Human review list builder
@@ -199,6 +203,7 @@ Current tests cover:
 - [Configuration Guide](docs/configuration.md)
 - [Privacy Setup Guide](docs/privacy-setup.md)
 - [Recommended Scan Roots Setup Guide](docs/roots-setup.md)
+- [Tag Taxonomy Guide](docs/tags-taxonomy.md)
 - [MVP0 Usage Guide](docs/mvp0-usage.md)
 - [MVP1 Extraction Guide](docs/mvp1-extraction.md)
 - [MVP2 Content Analysis Guide](docs/mvp2-analysis.md)

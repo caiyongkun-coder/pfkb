@@ -19,6 +19,7 @@ from .report import write_access_log, write_scan_plan
 from .review import build_review_items, load_analysis_manifest, review_stats, write_review_outputs
 from .roots import describe_roots_config, discover_candidate_roots, load_roots_config
 from .scan import scan_paths
+from .tags import describe_tags_config, filter_tags, load_tags_config, tag_definitions
 
 
 def build_parser() -> ArgumentParser:
@@ -68,6 +69,13 @@ def build_parser() -> ArgumentParser:
     privacy.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     privacy.add_argument("--no-rules", action="store_true", help="Hide individual rule values in text output")
     privacy.set_defaults(func=cmd_privacy)
+
+    tags = subparsers.add_parser("tags", help="Explain the tag taxonomy for humans or agents")
+    tags.add_argument("--tags-config", default="configs/tags.example.yaml", help="Tag taxonomy YAML")
+    tags.add_argument("--dimension", default=None, help="Filter tags by dimension")
+    tags.add_argument("--search", default=None, help="Search tag ids, labels, aliases, and descriptions")
+    tags.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    tags.set_defaults(func=cmd_tags)
 
     extract = subparsers.add_parser("extract", help="Extract content for inventory records allowed by policy")
     extract.add_argument("--inventory", default="data/inventory.sqlite", help="SQLite inventory path")
@@ -253,6 +261,27 @@ def cmd_privacy(args) -> int:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
     print(_format_privacy_summary(summary, include_rules=not args.no_rules))
+    return 0
+
+
+def cmd_tags(args) -> int:
+    tags_path = Path(args.tags_config)
+    if not tags_path.exists():
+        print(f"tags config not found: {tags_path}", file=sys.stderr)
+        return 2
+    config = load_tags_config(tags_path)
+    summary = describe_tags_config(config)
+    definitions = filter_tags(
+        tag_definitions(config),
+        dimension=args.dimension,
+        query=args.search,
+    )
+    summary["tags"] = [definition.as_dict() for definition in definitions]
+    summary["filtered_tag_count"] = len(definitions)
+    if args.json:
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0
+    print(_format_tags_summary(summary))
     return 0
 
 
@@ -487,6 +516,52 @@ def _format_roots_summary(summary: dict) -> str:
             lines.append(f"  description: {root.get('description')}")
         if root.get("recommended_policy"):
             lines.append(f"  recommended_policy: {root.get('recommended_policy')}")
+    return "\n".join(lines)
+
+
+def _format_tags_summary(summary: dict) -> str:
+    lines = [
+        "tags_config:",
+        f"- version: {summary.get('version')}",
+        f"- purpose: {summary.get('purpose')}",
+        f"- tag_count: {summary.get('tag_count')}",
+        f"- filtered_tag_count: {summary.get('filtered_tag_count', summary.get('tag_count'))}",
+    ]
+    principles = summary.get("design_principles") or []
+    if principles:
+        lines.append("design_principles:")
+        lines.extend(f"- {principle}" for principle in principles)
+    inherited = summary.get("inherited_patterns") or []
+    if inherited:
+        lines.append("inherited_patterns:")
+        for item in inherited:
+            lines.append(f"- {item.get('system')}: {item.get('keep')}")
+    dimensions = summary.get("dimensions") or []
+    if dimensions:
+        lines.append("dimensions:")
+        for dimension in dimensions:
+            lines.append(f"- {dimension.get('id')}: {dimension.get('zh')}")
+            if dimension.get("purpose"):
+                lines.append(f"  purpose: {dimension.get('purpose')}")
+    output_fields = summary.get("output_fields") or {}
+    if output_fields:
+        lines.append("output_fields:")
+        for name, description in output_fields.items():
+            lines.append(f"- {name}: {description}")
+    tags = summary.get("tags") or []
+    if tags:
+        lines.append("tags:")
+        for tag in tags:
+            lines.append(f"- {tag.get('id')}: {tag.get('zh')}")
+            lines.append(f"  dimension: {tag.get('dimension')}")
+            if tag.get("description"):
+                lines.append(f"  description: {tag.get('description')}")
+            if tag.get("aliases"):
+                lines.append("  aliases: " + ", ".join(str(item) for item in tag.get("aliases")))
+            if tag.get("recommended_policy"):
+                lines.append(f"  recommended_policy: {tag.get('recommended_policy')}")
+            if tag.get("default_sensitivity"):
+                lines.append(f"  default_sensitivity: {tag.get('default_sensitivity')}")
     return "\n".join(lines)
 
 
