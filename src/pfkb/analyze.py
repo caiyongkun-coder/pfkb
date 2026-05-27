@@ -285,18 +285,40 @@ def write_knowledge_index_md(results: list[AnalysisResult], path: str | Path) ->
         tag_counts = Counter(tag for result in ok_results for tag in result.tags)
         lines.append(
             "- 高频标签："
-            + ", ".join(f"`{tag}` {count}" for tag, count in tag_counts.most_common(10))
+            + ", ".join(f"{_format_tag(tag)} {count}" for tag, count in tag_counts.most_common(10))
         )
         lines.append(
             f"- 需要人工复核：{sum(1 for result in ok_results if result.needs_human_review)}"
         )
 
+    lines.extend(
+        [
+            "",
+            "## 阅读说明",
+            "",
+            "- 这是给人先快速盘点文件的索引，不是最终结论。",
+            "- `analysis_method: rules` 表示当前没有调用大模型，只使用文件路径、扩展名、标题和关键词规则。",
+            "- `规则置信度` 不是语义理解分数，只表示规则线索是否足够清楚；低分文件建议进入人工待整理清单。",
+            "- `需要人工复核` 为“是”时，代表系统不确定文件真实主题，后续可以由用户、本地 LLM 或显式授权的云端 LLM 复核。",
+            "- 标签后面的英文 key 是稳定机器字段，方便 agent、脚本和后续 HTML 页面继续读取。",
+            "",
+            "## 字段说明",
+            "",
+            "- 原始路径：文件在电脑上的位置，用来回到源文件。",
+            "- 内容类型：按扩展名和目录粗分出的类型，例如代码、配置、文档、测试。",
+            "- 标签：规则版主题标签，用来帮助浏览和分组；不是大模型理解后的最终标签。",
+            "- 允许向量化：是否允许进入语义检索或 embedding 流程；隐私策略禁止时必须保持为“否”。",
+            "- 摘要：当前取自正文开头或标题附近内容，适合作为预览，不适合作为精确总结。",
+        ]
+    )
+
     for content_type in sorted(by_type):
         lines.extend(["", f"## {_content_type_label(content_type)}", ""])
         for result in sorted(by_type[content_type], key=lambda item: item.path.lower()):
-            tags = " ".join(f"`{tag}`" for tag in result.tags)
+            tags = " ".join(_format_tag(tag) for tag in result.tags)
             embedding = "是" if result.embedding_allowed else "否"
             human_review = "是" if result.needs_human_review else "否"
+            review_reason = _review_reason_label(result.review_reason)
             lines.extend(
                 [
                     f"### {result.title}",
@@ -308,7 +330,7 @@ def write_knowledge_index_md(results: list[AnalysisResult], path: str | Path) ->
                     f"- 允许向量化：{embedding}",
                     f"- 分析方式：`{result.analysis_method}`",
                     f"- 规则置信度：{result.confidence:.2f}",
-                    f"- 需要人工复核：{human_review}（{result.review_reason}）",
+                    f"- 需要人工复核：{human_review}（{review_reason}；`{result.review_reason}`）",
                     "",
                     "摘要：",
                     "",
@@ -337,9 +359,11 @@ def write_tag_index_md(results: list[AnalysisResult], path: str | Path) -> None:
         "",
         "本文件按标签反向列出文件，方便人从主题入口逐层查看。",
         "",
+        "当前标签仍然是规则版标签：中文名称方便人阅读，括号中的英文 key 方便 agent 或脚本稳定引用。",
+        "",
     ]
     for tag in sorted(by_tag):
-        lines.extend(["", f"## {tag}", ""])
+        lines.extend(["", f"## {_format_tag(tag)}", ""])
         for result in sorted(by_tag[tag], key=lambda item: item.path.lower()):
             lines.append(f"- `{result.path}` - {result.title}")
     Path(path).write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
@@ -408,3 +432,45 @@ def _content_type_label(content_type: str) -> str:
         "unknown": "未知",
     }
     return labels.get(content_type, content_type)
+
+
+def _format_tag(tag: str) -> str:
+    label = _tag_label(tag)
+    if label == tag:
+        return f"`{tag}`"
+    return f"{label}（`{tag}`）"
+
+
+def _tag_label(tag: str) -> str:
+    labels = {
+        "analysis": "分析/摘要",
+        "cli": "命令行",
+        "code": "代码",
+        "config": "配置",
+        "configuration": "配置",
+        "docs": "文档",
+        "document": "文档",
+        "extract": "正文提取",
+        "file": "文件",
+        "inventory": "文件清单",
+        "license": "许可证",
+        "privacy": "隐私/权限",
+        "readme": "说明文档",
+        "roadmap": "计划/路线图",
+        "roots": "扫描目录",
+        "scan": "扫描",
+        "test": "测试",
+        "tests": "测试",
+    }
+    return labels.get(tag, tag)
+
+
+def _review_reason_label(reason: str) -> str:
+    labels = {
+        "analysis_error": "分析过程出错，需要人工检查",
+        "rules_low_signal": "规则线索不足，无法可靠判断主题",
+        "rules_only_needs_semantic_review": "规则版结果需要语义复核",
+        "rules_only_no_llm": "没有配置 LLM，只能给出规则版结果",
+        "rules_only_optional_review": "规则版结果可用，但仍建议后续抽查",
+    }
+    return labels.get(reason, reason)

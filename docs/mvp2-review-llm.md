@@ -71,6 +71,26 @@ python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis da
 - `cloud_not_authorized`：云端模式下路径未显式授权。
 - `cloud_forbidden_by_policy`：策略禁止云端处理。
 
+## 后续 HTML 交互版
+
+当前阶段继续保留 Markdown 和 JSONL：Markdown 适合人直接打开审阅，JSONL 适合 agent 和脚本读取。
+
+随着文件数量增加，只靠 Markdown 会越来越难翻阅。后续应在不删除 Markdown 的前提下，增加一组本地 HTML 页面：
+
+- `knowledge-index.html`：给人按标签、目录、内容类型逐层浏览知识库。
+- `human-review.html`：给人处理待整理文件，并把选择写回本地决策记录。
+
+HTML 版优先支持这些交互：
+
+- 允许本地 LLM 查看这个文件。
+- 在云端策略已经显式授权的前提下，允许云端 LLM 查看这个文件。
+- 稍后审核这个文件。
+- 忽略这个文件。
+- 标记为已人工整理。
+- 保持本地-only，不允许云端读取。
+
+这些交互不应该悄悄删除文件，也不应该直接绕过隐私策略。建议把用户选择写入独立的本地记录，例如 `review-decisions.jsonl`，再由后续命令显式应用到配置或分析流程。
+
 ## 设计原则
 
 当前系统不会假装理解了一切。
