@@ -1,0 +1,120 @@
+# 隐私访问策略示例。
+# 建议复制为 configs/privacy.yaml 后按个人电脑实际路径调整。
+#
+# 路径写法：
+# - Windows 示例优先使用 C:/Users/<user>/...，统一用 / 作为分隔符。
+# - 也可以使用 ${USERPROFILE}、${HOME}、~ 这类占位写法，便于跨平台。
+# - glob 使用 ** 匹配任意层级。
+#
+# 策略优先级固定为：
+# deny > metadata_only > no_embedding > allow
+# allow 不能覆盖 deny。
+
+version: 1
+
+deny:
+  # 命中 deny 的文件或目录永远不读取、不解析、不索引。
+  paths:
+    - "C:/Users/<user>/Documents/Private"
+    - "C:/Users/<user>/Documents/Passwords"
+    - "C:/Users/<user>/.ssh"
+    - "${USERPROFILE}/.ssh"
+    - "${HOME}/.ssh"
+    - "${HOME}/.gnupg"
+
+  globs:
+    - "**/PasswordSafe/**"
+    - "**/1Password/**"
+    - "**/Bitwarden/**"
+    - "**/KeePass/**"
+    - "**/Wallets/**"
+    - "**/wallet.dat"
+    - "**/Cookies"
+    - "**/Login Data"
+    - "**/Local State"
+
+  filenames:
+    - ".env"
+    - ".env.local"
+    - ".npmrc"
+    - ".pypirc"
+    - ".netrc"
+    - "id_rsa"
+    - "id_ed25519"
+    - "wallet.dat"
+
+  extensions:
+    - ".pem"
+    - ".key"
+    - ".p12"
+    - ".pfx"
+    - ".crt"
+    - ".cer"
+    - ".der"
+    - ".asc"
+    - ".gpg"
+    - ".kdbx"
+    - ".env"
+
+metadata_only:
+  # 只记录路径、大小、修改时间、文件类型等元数据，不读取正文。
+  paths:
+    - "C:/Users/<user>/Documents/Finance"
+    - "C:/Users/<user>/Documents/Medical"
+    - "C:/Users/<user>/Documents/Identity"
+    - "${HOME}/Documents/Finance"
+    - "${HOME}/Documents/Medical"
+
+  globs:
+    - "**/Bank Statements/**"
+    - "**/Tax/**"
+    - "**/Invoices/Private/**"
+    - "**/Scans/ID Cards/**"
+    - "**/Scans/Passports/**"
+
+  extensions:
+    - ".ofx"
+    - ".qfx"
+
+no_embedding:
+  # 允许读取和提取文本，但不写入向量索引。
+  # 适合合同、草稿、客户资料等“可检索元信息，但不希望语义向量化”的内容。
+  paths:
+    - "C:/Users/<user>/Documents/Contracts"
+    - "C:/Users/<user>/Documents/Client Work"
+    - "${HOME}/Documents/Contracts"
+
+  globs:
+    - "**/NDA/**"
+    - "**/Legal Drafts/**"
+    - "**/Client */**"
+
+allow:
+  # 明确允许扫描的范围。仍然必须先经过 deny 和默认 excludes。
+  paths:
+    - "C:/Users/<user>/Desktop"
+    - "C:/Users/<user>/Documents"
+    - "C:/Users/<user>/Downloads/Knowledge Inbox"
+    - "${USERPROFILE}/Desktop"
+    - "${USERPROFILE}/Documents"
+    - "${HOME}/Desktop"
+    - "${HOME}/Documents"
+
+  globs:
+    - "**/Notes/**"
+    - "**/Knowledge/**"
+    - "**/Research/**"
+
+  extensions:
+    - ".txt"
+    - ".md"
+    - ".rst"
+    - ".pdf"
+    - ".docx"
+    - ".pptx"
+    - ".xlsx"
+    - ".csv"
+    - ".json"
+    - ".yaml"
+    - ".yml"
+    - ".html"
