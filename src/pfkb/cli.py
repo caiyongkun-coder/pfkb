@@ -7,7 +7,7 @@ import sys
 
 from .inventory import Inventory
 from .parse import extract_jobs, plan_parse_jobs_from_records, write_manifest
-from .policy import PolicyEngine
+from .policy import PolicyEngine, describe_privacy_policy, load_policy
 from .report import write_access_log, write_scan_plan
 from .roots import discover_candidate_roots
 from .scan import scan_paths
@@ -51,6 +51,12 @@ def build_parser() -> ArgumentParser:
     roots.add_argument("--include-missing", action="store_true", help="Also show roots that do not exist")
     roots.add_argument("--json", action="store_true", help="Emit JSON")
     roots.set_defaults(func=cmd_roots)
+
+    privacy = subparsers.add_parser("privacy", help="Explain a privacy policy for humans or agents")
+    privacy.add_argument("--privacy", default="configs/privacy.example.yaml", help="Privacy policy YAML")
+    privacy.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    privacy.add_argument("--no-rules", action="store_true", help="Hide individual rule values in text output")
+    privacy.set_defaults(func=cmd_privacy)
 
     extract = subparsers.add_parser("extract", help="Extract content for inventory records allowed by policy")
     extract.add_argument("--inventory", default="data/inventory.sqlite", help="SQLite inventory path")
@@ -189,6 +195,19 @@ def cmd_roots(args) -> int:
     return 0
 
 
+def cmd_privacy(args) -> int:
+    privacy_path = Path(args.privacy)
+    if not privacy_path.exists():
+        print(f"privacy config not found: {privacy_path}", file=sys.stderr)
+        return 2
+    summary = describe_privacy_policy(load_policy(privacy_path))
+    if args.json:
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0
+    print(_format_privacy_summary(summary, include_rules=not args.no_rules))
+    return 0
+
+
 def cmd_extract(args) -> int:
     inventory_path = Path(args.inventory)
     if not inventory_path.exists():
@@ -261,6 +280,48 @@ def _optional_path(value: str | None) -> str | None:
         return None
     path = Path(value)
     return str(path) if path.exists() else None
+
+
+def _format_privacy_summary(summary: dict, *, include_rules: bool) -> str:
+    lines = [
+        "privacy_policy:",
+        f"- version: {summary.get('version')}",
+        f"- purpose: {summary.get('purpose')}",
+        f"- priority: {' > '.join(summary.get('priority', []))}",
+        f"- require_allow: {str(summary.get('require_allow')).lower()}",
+    ]
+    setup_questions = summary.get("setup_questions") or []
+    if setup_questions:
+        lines.append("setup_questions:")
+        lines.extend(f"- {question}" for question in setup_questions)
+    lines.append("path_syntax:")
+    lines.extend(f"- {item}" for item in summary.get("path_syntax", []))
+    lines.append("policies:")
+    for policy in summary.get("policies", []):
+        lines.append(f"- {policy['policy']}: {policy['title']}")
+        lines.append(f"  effect: {policy['effect']}")
+        lines.append(f"  when_to_use: {policy['when_to_use']}")
+        questions = policy.get("questions") or []
+        if questions:
+            lines.append("  questions:")
+            lines.extend(f"  - {question}" for question in questions)
+        examples = policy.get("examples") or []
+        if examples:
+            lines.append("  examples:")
+            lines.extend(f"  - {example}" for example in examples)
+        if include_rules:
+            rules = policy.get("rules") or {}
+            lines.append("  rules:")
+            if not rules:
+                lines.append("  - none")
+            for rule_type, values in rules.items():
+                for value in values:
+                    lines.append(f"  - {rule_type}: {value}")
+        else:
+            counts = policy.get("rule_counts") or {}
+            count_text = ", ".join(f"{key}={value}" for key, value in counts.items()) or "none"
+            lines.append(f"  rule_counts: {count_text}")
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:

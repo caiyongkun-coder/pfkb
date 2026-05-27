@@ -27,7 +27,7 @@ PFKB is meant to be a knowledge governance layer over the local filesystem, not 
 - Default excludes for system folders, developer noise, dangerous extensions, installers, caches, and temporary files.
 - Dry-run scanning that only traverses paths and metadata; it does not read file bodies.
 - Outputs `scan-plan.md`, `access-log.jsonl`, and `inventory.sqlite`.
-- CLI commands: `pfkb status`, `pfkb list`, `pfkb show`, `pfkb roots`.
+- CLI commands: `pfkb privacy`, `pfkb status`, `pfkb list`, `pfkb show`, `pfkb roots`.
 - `pfkb extract` for files allowed by policy.
 - `pfkb extracts` for persisted extraction results and status counts.
 - Incremental extraction: unchanged successful sources are skipped by default, with `--force` and `--retry-failed` available.
@@ -59,6 +59,10 @@ In MVP0, `pfkb scan` is a dry-run: it creates an access plan and an inventory, b
 ```powershell
 # Show suggested personal scan roots
 python -m pfkb roots --include-missing
+
+# Explain the privacy policy for a user or setup agent
+python -m pfkb privacy --privacy configs/privacy.yaml
+python -m pfkb privacy --privacy configs/privacy.yaml --json
 
 # Scan a small target first
 python -m pfkb scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
@@ -96,6 +100,7 @@ configs/
   privacy.example.yaml       Example user privacy policy
 docs/
   configuration.md           Configuration guide
+  privacy-setup.md           Privacy setup and agent-readable policy guide
   mvp0-usage.md              MVP0 usage guide
 src/pfkb/
   policy.py                  Privacy policy engine
@@ -157,6 +162,7 @@ Current tests cover:
 - [Project Start](PROJECT_START.md)
 - [Development Plan](DEVELOPMENT_PLAN.md)
 - [Configuration Guide](docs/configuration.md)
+- [Privacy Setup Guide](docs/privacy-setup.md)
 - [MVP0 Usage Guide](docs/mvp0-usage.md)
 - [MVP1 Extraction Guide](docs/mvp1-extraction.md)
 

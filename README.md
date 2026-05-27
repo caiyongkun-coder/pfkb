@@ -27,7 +27,7 @@ PFKB 想做的是本地文件系统上的“知识治理层”，而不是又一
 - 默认排除系统目录、开发噪声、危险扩展名、安装包、缓存和临时文件。
 - dry-run 扫描只遍历路径和元数据，不读取文件正文。
 - 输出 `scan-plan.md`、`access-log.jsonl` 和 `inventory.sqlite`。
-- 提供 `pfkb status`、`pfkb list`、`pfkb show`、`pfkb roots`。
+- 提供 `pfkb privacy`、`pfkb status`、`pfkb list`、`pfkb show`、`pfkb roots`。
 - 提供 `pfkb extract`，只对策略允许读取的文件执行提取。
 - 提供 `pfkb extracts`，查看持久化的提取结果和状态统计。
 - 支持增量提取：默认跳过源文件未变化的成功项，支持 `--force` 和 `--retry-failed`。
@@ -59,6 +59,10 @@ python -m pfkb extracts --inventory data/smoke/inventory.sqlite --stats
 ```powershell
 # 查看推荐扫描目录
 python -m pfkb roots --include-missing
+
+# 给用户或初始化 agent 解释隐私配置
+python -m pfkb privacy --privacy configs/privacy.yaml
+python -m pfkb privacy --privacy configs/privacy.yaml --json
 
 # 扫描一个小目录
 python -m pfkb scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
@@ -96,6 +100,7 @@ configs/
   privacy.example.yaml       用户隐私策略示例
 docs/
   configuration.md           配置说明
+  privacy-setup.md           隐私配置初始化和 AI 可读说明
   mvp0-usage.md              MVP0 使用说明
 src/pfkb/
   policy.py                  隐私策略引擎
@@ -157,6 +162,7 @@ python -m pytest -q
 - [项目启动文档](PROJECT_START.md)
 - [开发计划与自研范围](DEVELOPMENT_PLAN.md)
 - [配置说明](docs/configuration.md)
+- [隐私配置初始化说明](docs/privacy-setup.md)
 - [MVP0 使用说明](docs/mvp0-usage.md)
 - [MVP1 提取说明](docs/mvp1-extraction.md)
 

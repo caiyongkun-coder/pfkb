@@ -1,28 +1,119 @@
-# 隐私访问策略示例。
-# 建议复制为 configs/privacy.yaml 后按个人电脑实际路径调整。
+# PFKB privacy policy example.
 #
-# 路径写法：
-# - Windows 示例优先使用 C:/Users/<user>/...，统一用 / 作为分隔符。
-# - 也可以使用 ${USERPROFILE}、${HOME}、~ 这类占位写法，便于跨平台。
-# - glob 使用 ** 匹配任意层级。
+# Copy this file to configs/privacy.yaml, then customize it for the current
+# machine before running a real scan:
 #
-# 策略优先级固定为：
-# deny > metadata_only > no_embedding > allow
-# allow 不能覆盖 deny。
+#   Copy-Item configs/privacy.example.yaml configs/privacy.yaml
+#
+# Rule priority is fixed:
+#   deny > metadata_only > no_embedding > allow
+#
+# Important:
+# - "deny" always wins. "allow" cannot override a deny rule or default exclude.
+# - "metadata_only" records path/name/size/time/type only; it must not open file content.
+# - "no_embedding" may read/extract locally, but must not write semantic vectors.
+# - Use / as the path separator. Windows paths can be written as C:/Users/<user>/...
+# - ${USERPROFILE}, ${HOME}, and ~ are expanded at runtime.
+# - Glob patterns use ** to match any directory depth.
 
 version: 1
 
+# This assistant section is ignored by the scanner. It exists so an agent or
+# setup wizard can explain the policy, ask the right questions, and edit the
+# real configs/privacy.yaml without guessing what each rule means.
+assistant:
+  purpose: "让用户和本地 agent 先确认哪些文件绝对不能读取，哪些只能登记元数据，哪些可以读取但不能向量化，哪些可以成为知识库内容。"
+  priority:
+    - deny
+    - metadata_only
+    - no_embedding
+    - allow
+  path_syntax:
+    - "paths 是路径前缀匹配，适合明确的本机目录。"
+    - "globs 是全路径通配符，适合不同机器路径不固定的目录。"
+    - "filenames 是精确文件名匹配，例如 .env、wallet.dat。"
+    - "extensions 是扩展名匹配，例如 .pem、.pdf。"
+    - "directory_names 是路径中任意一层目录名匹配。"
+  rule_fields:
+    paths: "环境变量展开后的路径前缀匹配。"
+    globs: "全路径 glob 通配符，适合不同机器上位置不固定的目录。"
+    extensions: "文件扩展名，例如 .pdf 或 .pem。"
+    filenames: "精确文件名，例如 .env 或 wallet.dat。"
+    file_globs: "只匹配文件名的 glob 通配符。"
+    directory_names: "路径中任意一层目录名匹配。"
+  setup_questions:
+    - "这台电脑上密码库、密钥、钱包、浏览器登录数据分别在哪些目录？"
+    - "财务、医疗、身份资料是完全禁止读取，还是只记录元数据？"
+    - "合同、客户资料、草稿是否允许本地摘要，但禁止进入向量索引？"
+    - "哪些目录是低风险知识来源，例如笔记、研究资料、桌面、文档、知识收件箱？"
+    - "是否启用 require_allow，让未命中 allow 的路径默认拒绝？"
+  policies:
+    deny:
+      title: "完全禁止"
+      effect: "不读取、不解析、不摘要、不索引、不 embedding。"
+      when_to_use: "密码、密钥、钱包、浏览器凭据、私密导出、绝对不希望被打开的应用数据。"
+      questions:
+        - "你的密码管理器、SSH/GPG 密钥、钱包文件在哪里？"
+        - "哪些 app 的内部数据库不应该被打开？"
+      examples:
+        - ".ssh"
+        - ".gnupg"
+        - "1Password / Bitwarden / KeePass"
+        - "wallet.dat"
+        - "browser Login Data"
+    metadata_only:
+      title: "只登记元数据"
+      effect: "只记录路径、文件名、大小、时间、扩展名等，不读取正文。"
+      when_to_use: "财务、医疗、身份资料等知道存在即可，但正文敏感的内容。"
+      questions:
+        - "税务、银行流水、病历、证件扫描件在哪些目录？"
+        - "这些目录是否连 OCR/预览都不允许？"
+      examples:
+        - "Tax"
+        - "Bank Statements"
+        - "Medical"
+        - "Passports"
+    no_embedding:
+      title: "可读取但不向量化"
+      effect: "允许本地读取、提取、摘要，但禁止写入向量索引。"
+      when_to_use: "合同、客户资料、法律草稿等可以被本地整理，但不希望进入语义检索向量库的内容。"
+      questions:
+        - "哪些目录可以生成摘要，但不应该进入 embedding/vector store？"
+      examples:
+        - "Contracts"
+        - "NDA"
+        - "Client Work"
+        - "Legal Drafts"
+    allow:
+      title: "允许进入知识库"
+      effect: "在未命中更高优先级规则和默认排除规则时，可以读取、提取、索引、embedding。"
+      when_to_use: "低风险且有知识价值的目录，例如笔记、研究资料、文档、知识收件箱。"
+      questions:
+        - "哪些目录是第一批希望 agent 整理的知识来源？"
+      examples:
+        - "Desktop"
+        - "Documents"
+        - "Notes"
+        - "Research"
+        - "Knowledge Inbox"
+
 deny:
-  # 命中 deny 的文件或目录永远不读取、不解析、不索引。
+  help:
+    title: "完全禁止"
+    effect: "命中后永远不读取正文，不解析，不索引。"
+    when_to_use: "密码库、密钥、钱包、浏览器登录数据库、极私密目录。"
   paths:
+    # 私密文件夹示例。请改成你机器上的真实目录。
     - "C:/Users/<user>/Documents/Private"
     - "C:/Users/<user>/Documents/Passwords"
+    # SSH/GPG 密钥目录，通常包含私钥。
     - "C:/Users/<user>/.ssh"
     - "${USERPROFILE}/.ssh"
     - "${HOME}/.ssh"
     - "${HOME}/.gnupg"
 
   globs:
+    # 密码管理器、钱包、浏览器凭据等常见敏感目录或文件。
     - "**/PasswordSafe/**"
     - "**/1Password/**"
     - "**/Bitwarden/**"
@@ -34,6 +125,7 @@ deny:
     - "**/Local State"
 
   filenames:
+    # 常见密钥、登录配置、钱包文件名。
     - ".env"
     - ".env.local"
     - ".npmrc"
@@ -44,6 +136,7 @@ deny:
     - "wallet.dat"
 
   extensions:
+    # 证书、私钥、加密文件、密码库。
     - ".pem"
     - ".key"
     - ".p12"
@@ -57,8 +150,12 @@ deny:
     - ".env"
 
 metadata_only:
-  # 只记录路径、大小、修改时间、文件类型等元数据，不读取正文。
+  help:
+    title: "只登记元数据"
+    effect: "只记录文件存在和基础属性，不打开文件正文。"
+    when_to_use: "财务、医疗、身份资料等敏感但仍需要被盘点的内容。"
   paths:
+    # 财务、医疗、身份资料目录示例。请按实际机器调整。
     - "C:/Users/<user>/Documents/Finance"
     - "C:/Users/<user>/Documents/Medical"
     - "C:/Users/<user>/Documents/Identity"
@@ -66,6 +163,7 @@ metadata_only:
     - "${HOME}/Documents/Medical"
 
   globs:
+    # 银行流水、税务、私人发票、证件扫描件。
     - "**/Bank Statements/**"
     - "**/Tax/**"
     - "**/Invoices/Private/**"
@@ -73,25 +171,34 @@ metadata_only:
     - "**/Scans/Passports/**"
 
   extensions:
+    # 金融软件导出的交易格式。
     - ".ofx"
     - ".qfx"
 
 no_embedding:
-  # 允许读取和提取文本，但不写入向量索引。
-  # 适合合同、草稿、客户资料等“可检索元信息，但不希望语义向量化”的内容。
+  help:
+    title: "可读取但不向量化"
+    effect: "允许读取和提取文本，但不写入向量索引。"
+    when_to_use: "合同、草稿、客户资料等可以本地整理但不希望进入语义检索的内容。"
   paths:
+    # 合同、客户资料目录示例。
     - "C:/Users/<user>/Documents/Contracts"
     - "C:/Users/<user>/Documents/Client Work"
     - "${HOME}/Documents/Contracts"
 
   globs:
+    # 法务和客户项目常见目录。
     - "**/NDA/**"
     - "**/Legal Drafts/**"
     - "**/Client */**"
 
 allow:
-  # 明确允许扫描的范围。仍然必须先经过 deny 和默认 excludes。
+  help:
+    title: "允许进入知识库"
+    effect: "允许读取、提取、索引、embedding，但仍要先通过 deny 和默认 excludes。"
+    when_to_use: "桌面、文档、笔记、研究资料、知识收件箱等低风险知识来源。"
   paths:
+    # 第一批建议扫描的个人知识入口。请按实际机器调整。
     - "C:/Users/<user>/Desktop"
     - "C:/Users/<user>/Documents"
     - "C:/Users/<user>/Downloads/Knowledge Inbox"
@@ -101,11 +208,13 @@ allow:
     - "${HOME}/Documents"
 
   globs:
+    # 显式命名为笔记、知识、研究的目录。
     - "**/Notes/**"
     - "**/Knowledge/**"
     - "**/Research/**"
 
   extensions:
+    # 常见可整理知识文件类型。后续可以按个人需求增加。
     - ".txt"
     - ".md"
     - ".rst"

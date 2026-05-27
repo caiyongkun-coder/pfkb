@@ -301,3 +301,50 @@ def test_load_excludes_default_rules_deny_common_noise_and_dangerous_files():
 
     for candidate in denied_paths:
         _assert_kind(engine.decide(candidate), "deny")
+
+
+def test_descriptive_privacy_fields_are_agent_readable_and_do_not_change_rules(tmp_path):
+    policy_mod = _policy_module()
+    root = tmp_path / "knowledge"
+    private = root / "Private"
+    root.mkdir()
+    private.mkdir()
+    policy_data = {
+        "version": 1,
+        "assistant": {
+            "purpose": "fixture purpose",
+            "setup_questions": ["Where are secrets?"],
+            "policies": {
+                "deny": {
+                    "title": "Do not touch",
+                    "effect": "Never open matched content.",
+                    "questions": ["Which folders are secret?"],
+                    "examples": ["Private"],
+                }
+            },
+        },
+        "deny": {
+            "help": {
+                "title": "Strict deny",
+                "when_to_use": "Secrets",
+            },
+            "paths": [_as_config_path(private)],
+        },
+        "allow": {
+            "help": {"title": "Allowed knowledge"},
+            "paths": [_as_config_path(root)],
+        },
+    }
+
+    summary = policy_mod.describe_privacy_policy(policy_data)
+    deny_summary = next(item for item in summary["policies"] if item["policy"] == "deny")
+
+    assert summary["purpose"] == "fixture purpose"
+    assert summary["setup_questions"] == ["Where are secrets?"]
+    assert deny_summary["title"] == "Strict deny"
+    assert deny_summary["rule_counts"]["paths"] == 1
+    assert deny_summary["rules"]["paths"] == [_as_config_path(private)]
+
+    engine = _make_engine(policy_mod, policy_data=policy_data)
+    _assert_kind(engine.decide(private / "secret.md"), "deny")
+    _assert_kind(engine.decide(root / "note.md"), "allow")

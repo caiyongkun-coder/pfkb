@@ -14,6 +14,56 @@ POLICY_DENY = "deny"
 POLICY_METADATA_ONLY = "metadata_only"
 POLICY_NO_EMBEDDING = "no_embedding"
 POLICY_ALLOW = "allow"
+POLICY_ORDER = (POLICY_DENY, POLICY_METADATA_ONLY, POLICY_NO_EMBEDDING, POLICY_ALLOW)
+
+RULE_GROUPS = {
+    "paths": ("paths", "path"),
+    "globs": ("path_globs", "globs", "glob"),
+    "extensions": ("extensions", "extension", "dangerous_extensions"),
+    "file_globs": ("file_globs", "files", "file_patterns"),
+    "filenames": ("filenames", "file_names", "names"),
+    "directory_names": ("dir_names", "directories", "directory_names"),
+}
+
+POLICY_HELP = {
+    POLICY_DENY: {
+        "title": "完全禁止",
+        "effect": "不读取、不提取、不索引、不摘要、不 embedding。",
+        "when_to_use": "密钥、密码库、钱包、浏览器登录数据，以及用户绝对不希望被打开的内容。",
+        "questions": [
+            "密码、密钥、钱包或私密导出文件存在哪里？",
+            "哪些 app 数据目录应该完全禁止访问？",
+        ],
+        "examples": [".ssh", ".env", "wallet.dat", "KeePass 密码库", "浏览器 Login Data"],
+    },
+    POLICY_METADATA_ONLY: {
+        "title": "只登记元数据",
+        "effect": "只记录路径、文件名、大小、时间和类型，不打开文件正文。",
+        "when_to_use": "知道文件存在有价值，但正文仍应保持私密的敏感领域。",
+        "questions": [
+            "哪些财务、医疗、身份或法律目录只应该被盘点？",
+        ],
+        "examples": ["税务目录", "银行流水", "医疗记录", "护照扫描件"],
+    },
+    POLICY_NO_EMBEDDING: {
+        "title": "可读取但不向量化",
+        "effect": "允许提取和摘要，但禁止写入向量/embedding 索引。",
+        "when_to_use": "可以本地摘要，但不应该进入语义向量检索的内容。",
+        "questions": [
+            "哪些合同、客户资料或草稿可以本地读取，但不能进入语义索引？",
+        ],
+        "examples": ["合同", "NDA 目录", "客户资料", "法律草稿"],
+    },
+    POLICY_ALLOW: {
+        "title": "允许进入知识库",
+        "effect": "在通过更高优先级规则和默认排除后，允许读取、提取、索引和 embedding。",
+        "when_to_use": "低风险知识目录，例如笔记、研究资料、文档和整理好的收件箱。",
+        "questions": [
+            "哪些目录应该成为第一批可检索知识来源？",
+        ],
+        "examples": ["Desktop", "Documents", "Notes", "Research", "Knowledge Inbox"],
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -65,6 +115,52 @@ def load_excludes(path: str | os.PathLike[str] | None) -> dict[str, Any]:
     return _load_yaml(path)
 
 
+def describe_privacy_policy(config: dict[str, Any] | None) -> dict[str, Any]:
+    """Return a human/agent-readable view of a privacy policy config.
+
+    The scanner ignores descriptive fields, but setup flows and agents can use
+    this summary to explain existing rules before proposing machine-specific
+    edits.
+    """
+
+    config = config or {}
+    assistant = _as_mapping(config.get("assistant"))
+    configured_priority = _string_list(assistant.get("priority"))
+    priority = configured_priority or list(POLICY_ORDER)
+    default_rule_fields = {
+        "paths": "环境变量展开后的路径前缀匹配。",
+        "globs": "全路径 glob 通配符，适合不同机器上位置不固定的目录。",
+        "extensions": "文件扩展名，例如 .pdf 或 .pem。",
+        "filenames": "精确文件名，例如 .env 或 wallet.dat。",
+        "file_globs": "只匹配文件名的 glob 通配符。",
+        "directory_names": "路径中任意一层目录名匹配。",
+    }
+    configured_rule_fields = {
+        str(key): str(value)
+        for key, value in _as_mapping(assistant.get("rule_fields")).items()
+    }
+    return {
+        "version": config.get("version", 1),
+        "purpose": str(
+            assistant.get(
+                "purpose",
+                "配置 PFKB 可以读取、提取、索引或只登记元数据的本地文件范围。",
+            )
+        ),
+        "priority": priority,
+        "require_allow": bool(config.get("require_allow", False)),
+        "path_syntax": _string_list(assistant.get("path_syntax"))
+        or [
+            "跨平台路径建议使用 / 作为分隔符。",
+            "${USERPROFILE}、${HOME} 等环境变量会在运行时展开。",
+            "glob 规则可以使用 ** 匹配任意目录层级。",
+        ],
+        "setup_questions": _string_list(assistant.get("setup_questions")),
+        "rule_fields": {**default_rule_fields, **configured_rule_fields},
+        "policies": [_describe_policy_section(config, assistant, policy) for policy in POLICY_ORDER],
+    }
+
+
 def _load_yaml(path: str | os.PathLike[str] | None) -> dict[str, Any]:
     if path is None:
         return {}
@@ -76,6 +172,35 @@ def _load_yaml(path: str | os.PathLike[str] | None) -> dict[str, Any]:
     if not isinstance(loaded, dict):
         raise ValueError(f"Config must be a mapping: {config_path}")
     return loaded
+
+
+def _describe_policy_section(
+    config: dict[str, Any],
+    assistant: dict[str, Any],
+    policy: str,
+) -> dict[str, Any]:
+    section = _as_mapping(config.get(policy))
+    assistant_policies = _as_mapping(assistant.get("policies"))
+    policy_help = {
+        **POLICY_HELP[policy],
+        **_as_mapping(assistant_policies.get(policy)),
+        **_as_mapping(section.get("help")),
+    }
+    rules = {
+        name: [str(value) for value in _list_values(section, *keys)]
+        for name, keys in RULE_GROUPS.items()
+    }
+    rules = {name: values for name, values in rules.items() if values}
+    return {
+        "policy": policy,
+        "title": str(policy_help.get("title", policy)),
+        "effect": str(policy_help.get("effect", "")),
+        "when_to_use": str(policy_help.get("when_to_use", "")),
+        "questions": _string_list(policy_help.get("questions")),
+        "examples": _string_list(policy_help.get("examples")),
+        "rule_counts": {name: len(values) for name, values in rules.items()},
+        "rules": rules,
+    }
 
 
 class PolicyEngine:
@@ -327,6 +452,16 @@ def _list_values(section: dict[str, Any], *keys: str) -> list[Any]:
         elif isinstance(raw, list):
             values.extend(raw)
     return values
+
+
+def _string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (str, int, float)):
+        return [str(value)]
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return []
 
 
 def _iter_rule_sections(config: dict[str, Any], source: str) -> Iterable[tuple[str, dict[str, Any]]]:

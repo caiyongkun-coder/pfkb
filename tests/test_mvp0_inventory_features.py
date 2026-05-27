@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import importlib
 import io
+import json
 import re
 from collections.abc import Iterable, Mapping
 from enum import Enum
@@ -305,6 +306,47 @@ def test_cli_status_list_and_show_read_inventory(tmp_path):
     assert show_code == 0, show_err
     assert "middle-metadata.txt" in show_out or str(show_path) in show_out
     assert "metadata_only" in show_out
+
+
+def test_cli_privacy_explains_policy_for_humans_and_agents(tmp_path):
+    privacy_path = tmp_path / "privacy.yaml"
+    privacy_path.write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "assistant:",
+                '  purpose: "privacy setup fixture"',
+                "  setup_questions:",
+                '    - "Where are private files?"',
+                "deny:",
+                "  help:",
+                '    title: "Strict deny"',
+                "  filenames:",
+                '    - ".env"',
+                "allow:",
+                "  paths:",
+                f'    - "{tmp_path.as_posix()}"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    text_code, text_out, text_err = _run_cli(["privacy", "--privacy", str(privacy_path)])
+    assert text_code == 0, text_err
+    assert "privacy_policy:" in text_out
+    assert "privacy setup fixture" in text_out
+    assert "Strict deny" in text_out
+    assert "filenames: .env" in text_out
+
+    json_code, json_out, json_err = _run_cli(
+        ["privacy", "--privacy", str(privacy_path), "--json"]
+    )
+    assert json_code == 0, json_err
+    payload = json.loads(json_out)
+    assert payload["purpose"] == "privacy setup fixture"
+    deny = next(item for item in payload["policies"] if item["policy"] == "deny")
+    assert deny["rules"]["filenames"] == [".env"]
 
 
 def test_scan_report_contains_policy_count_summary_before_entries(tmp_path):
