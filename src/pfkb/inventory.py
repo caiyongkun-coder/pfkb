@@ -5,10 +5,11 @@ import json
 import sqlite3
 from typing import Iterable
 
+from .parse import ExtractResult
 from .scan import ScanEntry
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class Inventory:
@@ -60,6 +61,21 @@ class Inventory:
                 last_seen_at TEXT NOT NULL,
                 extra_json TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS extractions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT NOT NULL,
+                parser TEXT NOT NULL,
+                status TEXT NOT NULL,
+                output_path TEXT,
+                error TEXT,
+                embedding_allowed INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_extractions_path ON extractions(path);
+            CREATE INDEX IF NOT EXISTS idx_extractions_status ON extractions(status);
+            CREATE INDEX IF NOT EXISTS idx_extractions_parser ON extractions(parser);
             """
         )
         self.connection.execute(
@@ -180,6 +196,70 @@ class Inventory:
         ).fetchall()
         return [(str(row["policy_source"]), int(row["count"])) for row in rows]
 
+    def add_extract_results(self, results: Iterable[ExtractResult]) -> int:
+        count = 0
+        with self.connection:
+            for result in results:
+                self.connection.execute(
+                    """
+                    INSERT INTO extractions (
+                        path, parser, status, output_path, error,
+                        embedding_allowed, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        result.path,
+                        result.parser,
+                        result.status,
+                        result.output_path,
+                        result.error,
+                        int(result.embedding_allowed),
+                        result.created_at,
+                    ),
+                )
+                count += 1
+        return count
+
+    def extract_stats(self) -> dict[str, int]:
+        rows = self.connection.execute(
+            """
+            SELECT status, COUNT(*) AS count
+            FROM extractions
+            GROUP BY status
+            ORDER BY status ASC
+            """
+        ).fetchall()
+        return {str(row["status"]): int(row["count"]) for row in rows}
+
+    def list_extracts(
+        self,
+        *,
+        limit: int = 50,
+        status: str | None = None,
+        parser: str | None = None,
+        path: str | Path | None = None,
+    ) -> list[dict]:
+        where: list[str] = []
+        params: dict[str, object] = {"limit": limit}
+        if status:
+            where.append("status = :status")
+            params["status"] = status
+        if parser:
+            where.append("parser = :parser")
+            params["parser"] = parser
+        if path:
+            where.append("path = :path")
+            params["path"] = str(path)
+        sql = """
+            SELECT *
+            FROM extractions
+        """
+        if where:
+            sql += f" WHERE {' AND '.join(where)}"
+        sql += " ORDER BY created_at DESC, id DESC LIMIT :limit"
+        rows = self.connection.execute(sql, params).fetchall()
+        return [_extract_row_to_dict(row) for row in rows]
+
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
     data = dict(row)
@@ -192,4 +272,10 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
     data["is_embedding_allowed"] = bool(data["is_embedding_allowed"])
     data["metadata_only"] = bool(data["metadata_only"])
     data["extra"] = json.loads(data.pop("extra_json") or "{}")
+    return data
+
+
+def _extract_row_to_dict(row: sqlite3.Row) -> dict:
+    data = dict(row)
+    data["embedding_allowed"] = bool(data["embedding_allowed"])
     return data

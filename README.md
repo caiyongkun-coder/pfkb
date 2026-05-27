@@ -29,6 +29,7 @@ PFKB 想做的是本地文件系统上的“知识治理层”，而不是又一
 - 输出 `scan-plan.md`、`access-log.jsonl` 和 `inventory.sqlite`。
 - 提供 `pfkb status`、`pfkb list`、`pfkb show`、`pfkb roots`。
 - 提供 `pfkb extract`，只对策略允许读取的文件执行提取。
+- 提供 `pfkb extracts`，查看持久化的提取结果和状态统计。
 - 支持直接文本提取；MarkItDown 是可选解析依赖。
 
 ## 快速开始
@@ -47,6 +48,7 @@ python -m pfkb scan "$env:TEMP\pfkb-mvp0-smoke" --privacy configs/privacy.yaml -
 python -m pfkb status --inventory data/smoke/inventory.sqlite --sources
 python -m pfkb list --inventory data/smoke/inventory.sqlite
 python -m pfkb extract --inventory data/smoke/inventory.sqlite --out data/smoke-extract
+python -m pfkb extracts --inventory data/smoke/inventory.sqlite --stats
 ```
 
 `pfkb scan` 在 MVP0 中是 dry-run：它只生成访问计划和 inventory，不读取正文、不做摘要、不写入向量库。
@@ -74,6 +76,9 @@ python -m pfkb show "C:\path\to\file.md" --inventory data/first-scan/inventory.s
 
 # 对允许读取的文件执行提取
 python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
+
+# 查看提取状态
+python -m pfkb extracts --inventory data/first-scan/inventory.sqlite --stats
 ```
 
 ## 项目结构
@@ -137,6 +142,7 @@ python -m pytest -q
 - 推荐扫描目录发现。
 - 解析任务策略门控。
 - 直接文本提取和 extraction manifest。
+- extraction result SQLite 持久化和查询。
 
 ## 文档
 

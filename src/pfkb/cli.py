@@ -59,6 +59,17 @@ def build_parser() -> ArgumentParser:
     extract.add_argument("--manifest", default=None, help="Manifest JSONL path")
     extract.set_defaults(func=cmd_extract)
 
+    extracts = subparsers.add_parser("extracts", help="List extraction results stored in inventory")
+    extracts.add_argument("--inventory", default="data/inventory.sqlite", help="SQLite inventory path")
+    extracts.add_argument("--status", default=None, help="Filter by extraction status")
+    extracts.add_argument("--parser", default=None, help="Filter by parser")
+    extracts.add_argument("--path", default=None, help="Filter by source path")
+    extracts.add_argument("--limit", type=int, default=20, help="Maximum records to show")
+    extracts.add_argument("--json", action="store_true", help="Emit JSON")
+    extracts.add_argument("--stats", action="store_true", help="Show status counts (default)")
+    extracts.add_argument("--no-stats", action="store_true", help="Hide status counts")
+    extracts.set_defaults(func=cmd_extracts)
+
     return parser
 
 
@@ -188,14 +199,48 @@ def cmd_extract(args) -> int:
     jobs = build_parse_jobs_from_records(records)
     results = extract_jobs(jobs, output_dir)
     write_manifest(results, manifest_path)
+    with Inventory(inventory_path) as inventory:
+        stored_count = inventory.add_extract_results(results)
     counts: dict[str, int] = {}
     for result in results:
         counts[result.status] = counts.get(result.status, 0) + 1
     print(f"jobs: {len(jobs)}")
     print(f"manifest: {manifest_path}")
+    print(f"stored: {stored_count}")
     for status, count in sorted(counts.items()):
         print(f"{status}: {count}")
     return 0 if not any(result.status == "error" for result in results) else 1
+
+
+def cmd_extracts(args) -> int:
+    inventory_path = Path(args.inventory)
+    if not inventory_path.exists():
+        print(f"inventory not found: {inventory_path}", file=sys.stderr)
+        return 2
+    with Inventory(inventory_path) as inventory:
+        stats = {} if args.no_stats else inventory.extract_stats()
+        records = inventory.list_extracts(
+            limit=args.limit,
+            status=args.status,
+            parser=args.parser,
+            path=args.path,
+        )
+    if args.json:
+        payload = {"stats": stats, "records": records}
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    if not args.no_stats:
+        print("extract_status:")
+        if stats:
+            for status, count in sorted(stats.items()):
+                print(f"- {status}: {count}")
+        else:
+            print("- empty: 0")
+    for record in records:
+        print(
+            f"{record['status']}\t{record['parser']}\t{record['path']}\t{record.get('output_path') or ''}"
+        )
+    return 0
 
 
 def _optional_path(value: str | None) -> str | None:

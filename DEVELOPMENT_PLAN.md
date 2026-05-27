@@ -30,13 +30,14 @@ MVP 0 已启动并完成第一条可运行链路：
 - 已实现 `pfkb roots`，用于展示推荐个人扫描目录。
 - dry-run 报告已包含策略计数和策略来源聚合。
 - 已实现隐私门控后的提取管线：`pfkb extract`、直接文本提取、MarkItDown 可选适配和 extraction manifest。
+- 已实现 extraction result SQLite 持久化和查询：`pfkb extracts`。
 
 下一步进入 MVP 0 增强和 MVP 1 前置：
 
 - 扩展真实 Windows 用户目录扫描样例。
 - 为 inventory 增加更多筛选和导出方式。
 - 扩展 MarkItDown 真实格式验证样例。
-- 为 extraction manifest 增加 SQLite 同步表和重跑策略。
+- 为 extraction 增加重跑策略、失败重试和 artifact 清理策略。
 
 ## 2. 难度标注
 

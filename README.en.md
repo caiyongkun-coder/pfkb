@@ -29,6 +29,7 @@ PFKB is meant to be a knowledge governance layer over the local filesystem, not 
 - Outputs `scan-plan.md`, `access-log.jsonl`, and `inventory.sqlite`.
 - CLI commands: `pfkb status`, `pfkb list`, `pfkb show`, `pfkb roots`.
 - `pfkb extract` for files allowed by policy.
+- `pfkb extracts` for persisted extraction results and status counts.
 - Direct text extraction is supported; MarkItDown is an optional parser dependency.
 
 ## Quick Start
@@ -47,6 +48,7 @@ python -m pfkb scan "$env:TEMP\pfkb-mvp0-smoke" --privacy configs/privacy.yaml -
 python -m pfkb status --inventory data/smoke/inventory.sqlite --sources
 python -m pfkb list --inventory data/smoke/inventory.sqlite
 python -m pfkb extract --inventory data/smoke/inventory.sqlite --out data/smoke-extract
+python -m pfkb extracts --inventory data/smoke/inventory.sqlite --stats
 ```
 
 In MVP0, `pfkb scan` is a dry-run: it creates an access plan and an inventory, but it does not read file content, summarize files, or write vectors.
@@ -74,6 +76,9 @@ python -m pfkb show "C:\path\to\file.md" --inventory data/first-scan/inventory.s
 
 # Extract content from files allowed by policy
 python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
+
+# Show extraction status
+python -m pfkb extracts --inventory data/first-scan/inventory.sqlite --stats
 ```
 
 ## Project Layout
@@ -137,6 +142,7 @@ Current tests cover:
 - Suggested scan root discovery.
 - Parser-job policy gating.
 - Direct text extraction and extraction manifests.
+- SQLite persistence and querying for extraction results.
 
 ## Docs
 
