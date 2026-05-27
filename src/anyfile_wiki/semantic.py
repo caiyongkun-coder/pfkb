@@ -76,7 +76,7 @@ TOPICS = [
     (
         "topic/cli_workflow",
         "命令行流程",
-        ("argparse", "subparsers", "cmd_", "python -m pfkb", "command"),
+        ("argparse", "subparsers", "cmd_", "python -m anyfile_wiki", "command"),
         "把扫描、提取、分析、复核等步骤串成可执行命令。",
     ),
     (

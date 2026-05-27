@@ -144,7 +144,7 @@ def describe_privacy_policy(config: dict[str, Any] | None) -> dict[str, Any]:
         "purpose": str(
             assistant.get(
                 "purpose",
-                "配置 PFKB 可以读取、提取、索引或只登记元数据的本地文件范围。",
+                "配置 AnyFile Wiki 可以读取、提取、索引或只登记元数据的本地文件范围。",
             )
         ),
         "priority": priority,

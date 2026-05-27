@@ -6,16 +6,16 @@ import json
 import sys
 from pathlib import Path
 
-from pfkb.cli import main as cli_main
-from pfkb.inventory import Inventory
-from pfkb.parse import (
+from anyfile_wiki.cli import main as cli_main
+from anyfile_wiki.inventory import Inventory
+from anyfile_wiki.parse import (
     ParseJob,
     build_parse_jobs_from_records,
     extract_jobs,
     write_manifest,
 )
-from pfkb.policy import AccessDecision
-from pfkb.scan import ScanEntry
+from anyfile_wiki.policy import AccessDecision
+from anyfile_wiki.scan import ScanEntry
 
 
 def _decision(

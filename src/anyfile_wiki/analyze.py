@@ -449,7 +449,7 @@ def write_knowledge_index_md(results: list[AnalysisResult], path: str | Path) ->
     lines = [
         "# 知识索引",
         "",
-        "本文件由 `pfkb analyze` 生成，用来给人快速浏览“这批文件大概是什么”。",
+        "本文件由 `anyfile-wiki analyze` 生成，用来给人快速浏览“这批文件大概是什么”。",
         "",
         method_note,
         "",

@@ -4,9 +4,9 @@ import contextlib
 import io
 from pathlib import Path
 
-from pfkb.cli import main as cli_main
-from pfkb.inventory import Inventory
-from pfkb.parse import ExtractResult
+from anyfile_wiki.cli import main as cli_main
+from anyfile_wiki.inventory import Inventory
+from anyfile_wiki.parse import ExtractResult
 
 
 def _result(path: Path, parser: str, status: str, created_at: str) -> ExtractResult:

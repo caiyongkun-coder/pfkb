@@ -6,13 +6,13 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pfkb.analyze import analyze_extract_records, classify_content_type, infer_tags
-from pfkb.cli import main as cli_main
-from pfkb.inventory import Inventory
-from pfkb.llm_client import LLMAnalysisRequest, LLMAnalysisResponse
-from pfkb.parse import ExtractResult
-from pfkb.policy import AccessDecision
-from pfkb.scan import ScanEntry
+from anyfile_wiki.analyze import analyze_extract_records, classify_content_type, infer_tags
+from anyfile_wiki.cli import main as cli_main
+from anyfile_wiki.inventory import Inventory
+from anyfile_wiki.llm_client import LLMAnalysisRequest, LLMAnalysisResponse
+from anyfile_wiki.parse import ExtractResult
+from anyfile_wiki.policy import AccessDecision
+from anyfile_wiki.scan import ScanEntry
 
 
 def _extract_result(
@@ -183,7 +183,7 @@ def test_analyze_extract_records_generates_summary_tags_and_counts(tmp_path):
 
 
 def test_codex_mock_analysis_preserves_rule_tags_and_adds_semantic_fields(tmp_path):
-    source = tmp_path / "src" / "pfkb" / "review.py"
+    source = tmp_path / "src" / "anyfile_wiki" / "review.py"
     output = tmp_path / "extract" / "review.py"
     output.parent.mkdir(parents=True)
     output.write_text(
@@ -280,7 +280,7 @@ def test_local_llm_cli_with_enabled_config_writes_manifest_and_knowledge_index(
     _write_llm_config(llm_config, mode="local")
     _write_tags_config(tags_config)
     fake = FakeLLMClient()
-    monkeypatch.setattr("pfkb.analyze.ConfiguredLLMClient", lambda config, method: fake)
+    monkeypatch.setattr("anyfile_wiki.analyze.ConfiguredLLMClient", lambda config, method: fake)
 
     out_dir = tmp_path / "analysis"
     code, stdout, stderr = _run_cli(
@@ -459,7 +459,7 @@ def test_cloud_llm_cli_calls_fake_client_when_inventory_policy_and_path_are_allo
     _write_llm_config(llm_config, mode="cloud", allowed_path=allowed_root)
     _write_tags_config(tags_config)
     fake = FakeLLMClient()
-    monkeypatch.setattr("pfkb.analyze.ConfiguredLLMClient", lambda config, method: fake)
+    monkeypatch.setattr("anyfile_wiki.analyze.ConfiguredLLMClient", lambda config, method: fake)
 
     out_dir = tmp_path / "analysis"
     code, stdout, stderr = _run_cli(
@@ -493,9 +493,9 @@ def test_cloud_llm_cli_calls_fake_client_when_inventory_policy_and_path_are_allo
 def test_classification_and_tags_use_path_and_content():
     assert classify_content_type("tests/test_policy.py", ".py") == "test"
     assert classify_content_type("configs/privacy.example.yaml", ".yaml") == "config"
-    assert classify_content_type("src/pfkb/policy.py", ".py") == "code"
+    assert classify_content_type("src/anyfile_wiki/policy.py", ".py") == "code"
 
-    tags = infer_tags("src/pfkb/cli.py", "argparse command scan extract inventory", "code")
+    tags = infer_tags("src/anyfile_wiki/cli.py", "argparse command scan extract inventory", "code")
     assert {"code", "cli", "scan", "extract", "inventory"} <= set(tags)
 
 
@@ -504,7 +504,7 @@ def test_analyze_cli_writes_knowledge_index_outputs(tmp_path):
     output = tmp_path / "extract" / "README.md"
     output.parent.mkdir()
     output.write_text(
-        "# Demo Knowledge Base\n\nPFKB scan extract analyze pipeline fixture.",
+        "# Demo Knowledge Base\n\nAnyFile Wiki scan extract analyze pipeline fixture.",
         encoding="utf-8",
     )
     failed = tmp_path / "failed.md"

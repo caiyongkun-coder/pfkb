@@ -4,7 +4,7 @@ MVP0 只做隐私优先的 dry-run 扫描：遍历路径、应用访问策略、
 
 ## 运行 CLI 前
 
-推荐新贡献者先在仓库根目录执行 editable install。项目采用 `src/` 布局，安装后 `python -m pfkb ...` 才能稳定找到包：
+推荐新贡献者先在仓库根目录执行 editable install。项目采用 `src/` 布局，安装后 `anyfile-wiki ...` 才能稳定找到包：
 
 ```powershell
 python -m pip install -e .[dev]
@@ -14,10 +14,10 @@ python -m pip install -e .[dev]
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python -m pfkb analyze --help
+python -m anyfile_wiki analyze --help
 ```
 
-未安装 editable 包且未设置 `PYTHONPATH` 时，`python -m pfkb ...` 可能报 `No module named pfkb`。
+未安装 editable 包且未设置 `PYTHONPATH` 时，`python -m anyfile_wiki ...` 可能报 `No module named anyfile_wiki`。
 
 ## 准备隐私策略
 
@@ -38,17 +38,17 @@ if (-not (Test-Path configs/privacy.yaml)) {
 第一次不要直接扫描整个 `Documents` 或用户目录。可以先准备一个很小的试扫目录：
 
 ```powershell
-New-Item -ItemType Directory -Force "$env:TEMP\pfkb-mvp0-smoke" | Out-Null
-"hello from pfkb" | Set-Content -Encoding UTF8 "$env:TEMP\pfkb-mvp0-smoke\note.txt"
-python -m pfkb scan "$env:TEMP\pfkb-mvp0-smoke" --privacy configs/privacy.yaml --out data/smoke --max-entries 50
+New-Item -ItemType Directory -Force "$env:TEMP\anyfile-wiki-mvp0-smoke" | Out-Null
+"hello from AnyFile Wiki" | Set-Content -Encoding UTF8 "$env:TEMP\anyfile-wiki-mvp0-smoke\note.txt"
+anyfile-wiki scan "$env:TEMP\anyfile-wiki-mvp0-smoke" --privacy configs/privacy.yaml --out data/smoke --max-entries 50
 ```
 
-`python -m pfkb scan` 在 MVP0 中就是 dry-run 扫描。`--max-entries` 用来限制最多记录多少个条目，适合先验证策略命中、输出文件和 inventory 结构。
+`anyfile-wiki scan` 在 MVP0 中就是 dry-run 扫描。`--max-entries` 用来限制最多记录多少个条目，适合先验证策略命中、输出文件和 inventory 结构。
 
 确认试扫结果符合预期后，再把扫描根目录换成更大的目标，例如：
 
 ```powershell
-python -m pfkb scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
+anyfile-wiki scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
 ```
 
 ## 查看扫描产物
@@ -71,7 +71,7 @@ Get-Content -Encoding UTF8 data/smoke/access-log.jsonl | Select-Object -First 3 
 `inventory.sqlite` 是 SQLite 盘点库。优先使用项目自带的状态命令查看策略计数：
 
 ```powershell
-python -m pfkb status --inventory data/smoke/inventory.sqlite
+anyfile-wiki status --inventory data/smoke/inventory.sqlite
 ```
 
 如果本机安装了 `sqlite3` CLI，也可以直接查询：

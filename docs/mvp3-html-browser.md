@@ -2,22 +2,22 @@
 
 MVP3 的第一步是让人类能直接浏览知识库，而不是只能读很长的 Markdown。
 
-当前已经实现 `pfkb html`：它读取 `knowledge-index.jsonl` 或 `analysis-manifest.jsonl` 中 `status: ok` 的分析结果，生成一个可离线打开的 `knowledge-index.html`。页面固定文案尽量采用中英双语，后端字段和标签 key 继续保留英文，方便 agent、脚本和后续工具稳定读取。
+当前已经实现 `anyfile-wiki html`：它读取 `knowledge-index.jsonl` 或 `analysis-manifest.jsonl` 中 `status: ok` 的分析结果，生成一个可离线打开的 `knowledge-index.html`。页面固定文案尽量采用中英双语，后端字段和标签 key 继续保留英文，方便 agent、脚本和后续工具稳定读取。
 
 ## 使用命令
 
 先完成扫描、提取和分析：
 
 ```powershell
-python -m pfkb scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
-python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze
+anyfile-wiki scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
+anyfile-wiki extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze
 ```
 
 再生成 HTML 资产浏览页：
 
 ```powershell
-python -m pfkb html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
+anyfile-wiki html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
 ```
 
 输出文件：

@@ -97,7 +97,7 @@ def build_review_items(
                     path=path,
                     category="not_extracted",
                     reason="隐私策略允许提取正文，但当前还没有提取结果。",
-                    action="运行 `pfkb extract`；如果这个文件暂时不重要，可以先保留在待整理清单里。",
+                    action="运行 `anyfile-wiki extract`；如果这个文件暂时不重要，可以先保留在待整理清单里。",
                     severity="medium",
                     access_policy=access_policy,
                     policy_source=str(record.get("policy_source") or ""),

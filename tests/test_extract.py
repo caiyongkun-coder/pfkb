@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pfkb.inventory import Inventory
-from pfkb.parse import build_parse_jobs_from_records, extract_jobs, write_manifest
-from pfkb.policy import PolicyEngine
-from pfkb.scan import scan_paths
+from anyfile_wiki.inventory import Inventory
+from anyfile_wiki.parse import build_parse_jobs_from_records, extract_jobs, write_manifest
+from anyfile_wiki.policy import PolicyEngine
+from anyfile_wiki.scan import scan_paths
 
 
 def test_parse_jobs_from_inventory_records_are_policy_gated(tmp_path):

@@ -20,7 +20,7 @@ def write_scan_plan(result: ScanResult, path: str | Path) -> None:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        "# PFKB Dry-run Scan Plan",
+        "# AnyFile Wiki Dry-run Scan Plan",
         "",
         "Generated before content extraction. This report records path-level access decisions only.",
         "",

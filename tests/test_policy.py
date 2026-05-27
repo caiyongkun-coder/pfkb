@@ -10,9 +10,9 @@ import pytest
 
 def _policy_module():
     try:
-        return importlib.import_module("pfkb.policy")
+        return importlib.import_module("anyfile_wiki.policy")
     except ModuleNotFoundError as exc:
-        pytest.fail(f"Expected pfkb.policy to be importable for MVP0 policy tests: {exc}")
+        pytest.fail(f"Expected anyfile_wiki.policy to be importable for MVP0 policy tests: {exc}")
 
 
 def _as_config_path(path: Path) -> str:

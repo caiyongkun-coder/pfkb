@@ -1,8 +1,8 @@
-# PFKB：个人文件知识库
+# AnyFile Wiki：个人文件知识库
 
 中文 | [English](README.en.md)
 
-PFKB（Personal File Knowledge Base）是一个本地优先的个人文件知识库项目。它的目标是让 OpenClaw、Hermes、Codex 等本地 agent 在空闲时，安全地盘点个人电脑里的文件，把沉淀的文档、笔记、PDF、表格、代码和应用数据逐步整理成可搜索、可浏览、可复用的知识资产。
+AnyFile Wiki 是一个本地优先的个人文件知识库项目。它的目标是让 OpenClaw、Hermes、Codex 等本地 agent 在空闲时，安全地盘点个人电脑里的文件，把沉淀的文档、笔记、PDF、表格、代码和应用数据逐步整理成可搜索、可浏览、可复用的知识资产。
 
 当前项目处于 MVP0：先解决“哪些文件可以碰、哪些绝对不能碰”的问题，再进入解析、摘要、标签、检索和知识编译。
 
@@ -16,7 +16,7 @@ PFKB（Personal File Knowledge Base）是一个本地优先的个人文件知识
 - agent 在工作前能不能先读取我的本地知识上下文？
 - 人类能不能像逛标签树、主题树、wiki 一样查看自己的数字资产？
 
-PFKB 想做的是本地文件系统上的“知识治理层”，而不是又一个普通 RAG 聊天工具。
+AnyFile Wiki 想做的是本地文件系统上的“知识治理层”，而不是又一个普通 RAG 聊天工具。
 
 ## 当前能力
 
@@ -28,18 +28,18 @@ PFKB 想做的是本地文件系统上的“知识治理层”，而不是又一
 - 默认排除系统目录、开发噪声、危险扩展名、安装包、缓存和临时文件。
 - dry-run 扫描只遍历路径和元数据，不读取文件正文。
 - 输出 `scan-plan.md`、`access-log.jsonl` 和 `inventory.sqlite`。
-- 提供 `pfkb privacy`、`pfkb status`、`pfkb list`、`pfkb show`、`pfkb roots`、`pfkb tags`。
-- 提供 `pfkb extract`，只对策略允许读取的文件执行提取。
-- 提供 `pfkb extracts`，查看持久化的提取结果和状态统计。
+- 提供 `anyfile-wiki privacy`、`anyfile-wiki status`、`anyfile-wiki list`、`anyfile-wiki show`、`anyfile-wiki roots`、`anyfile-wiki tags`。
+- 提供 `anyfile-wiki extract`，只对策略允许读取的文件执行提取。
+- 提供 `anyfile-wiki extracts`，查看持久化的提取结果和状态统计。
 - 支持增量提取：默认跳过源文件未变化的成功项，支持 `--force` 和 `--retry-failed`。
-- 提供 `pfkb analyze`，基于已提取文本生成本地规则版摘要、标签和知识索引；支持 `--method codex-mock`、`--method local-llm` 和 `--method cloud-llm`。
+- 提供 `anyfile-wiki analyze`，基于已提取文本生成本地规则版摘要、标签和知识索引；支持 `--method codex-mock`、`--method local-llm` 和 `--method cloud-llm`。
 - 真实 LLM/API 只读取隐私门控后的提取文本；云端模式还必须显式配置授权路径和风险确认。
-- 提供 `pfkb html`，把 `knowledge-index.jsonl` 转成本地可打开的中英双语资产浏览页，支持标签树、分页、筛选、搜索和文件详情。
+- 提供 `anyfile-wiki html`，把 `knowledge-index.jsonl` 转成本地可打开的中英双语资产浏览页，支持标签树、分页、筛选、搜索和文件详情。
 - 支持直接文本提取；MarkItDown 是可选解析依赖。
 
 ## 快速开始
 
-推荐先以 editable 模式安装项目，这样 `python -m pfkb ...` 可以从任何当前目录正常找到 `src/` 布局下的包：
+推荐先以 editable 模式安装项目，这样 `anyfile-wiki ...` 命令可以从任何当前目录正常使用：
 
 ```powershell
 python -m pip install -e .[dev]
@@ -48,91 +48,91 @@ if (-not (Test-Path configs/privacy.yaml)) {
     Copy-Item configs/privacy.example.yaml configs/privacy.yaml
 }
 
-New-Item -ItemType Directory -Force "$env:TEMP\pfkb-mvp0-smoke" | Out-Null
-"hello from pfkb" | Set-Content -Encoding UTF8 "$env:TEMP\pfkb-mvp0-smoke\note.txt"
+New-Item -ItemType Directory -Force "$env:TEMP\anyfile-wiki-mvp0-smoke" | Out-Null
+"hello from AnyFile Wiki" | Set-Content -Encoding UTF8 "$env:TEMP\anyfile-wiki-mvp0-smoke\note.txt"
 
-python -m pfkb scan "$env:TEMP\pfkb-mvp0-smoke" --privacy configs/privacy.yaml --out data/smoke --max-entries 50
-python -m pfkb status --inventory data/smoke/inventory.sqlite --sources
-python -m pfkb list --inventory data/smoke/inventory.sqlite
-python -m pfkb tags --tags-config configs/tags.example.yaml --dimension topic
-python -m pfkb extract --inventory data/smoke/inventory.sqlite --out data/smoke-extract
-python -m pfkb extracts --inventory data/smoke/inventory.sqlite --stats
-python -m pfkb analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze
-python -m pfkb analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze-codex --method codex-mock --compare-to data/smoke-analyze/analysis-manifest.jsonl
-python -m pfkb review --inventory data/smoke/inventory.sqlite --analysis data/smoke-analyze/analysis-manifest.jsonl --out data/smoke-review
-python -m pfkb html --analysis data/smoke-analyze/knowledge-index.jsonl --out data/smoke-html
+anyfile-wiki scan "$env:TEMP\anyfile-wiki-mvp0-smoke" --privacy configs/privacy.yaml --out data/smoke --max-entries 50
+anyfile-wiki status --inventory data/smoke/inventory.sqlite --sources
+anyfile-wiki list --inventory data/smoke/inventory.sqlite
+anyfile-wiki tags --tags-config configs/tags.example.yaml --dimension topic
+anyfile-wiki extract --inventory data/smoke/inventory.sqlite --out data/smoke-extract
+anyfile-wiki extracts --inventory data/smoke/inventory.sqlite --stats
+anyfile-wiki analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze
+anyfile-wiki analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze-codex --method codex-mock --compare-to data/smoke-analyze/analysis-manifest.jsonl
+anyfile-wiki review --inventory data/smoke/inventory.sqlite --analysis data/smoke-analyze/analysis-manifest.jsonl --out data/smoke-review
+anyfile-wiki html --analysis data/smoke-analyze/knowledge-index.jsonl --out data/smoke-html
 ```
 
-如果不安装包、只是临时从源码树运行 CLI，请先在当前 PowerShell 会话中设置 `PYTHONPATH`，否则 `python -m pfkb analyze --help` 等命令会因为找不到 `src/pfkb` 而失败：
+如果不安装包、只是临时从源码树运行 CLI，请先在当前 PowerShell 会话中设置 `PYTHONPATH`，然后用 `python -m anyfile_wiki ...` 启动模块：
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python -m pfkb analyze --help
+python -m anyfile_wiki analyze --help
 ```
 
-`pfkb scan` 在 MVP0 中是 dry-run：它只生成访问计划和 inventory，不读取正文、不做摘要、不写入向量库。
+`anyfile-wiki scan` 在 MVP0 中是 dry-run：它只生成访问计划和 inventory，不读取正文、不做摘要、不写入向量库。
 
 ## 常用命令
 
 ```powershell
 # 查看推荐扫描目录
-python -m pfkb roots --include-missing
+anyfile-wiki roots --include-missing
 
 # 解释推荐扫描目录配置
-python -m pfkb roots --explain
-python -m pfkb roots --explain --json
+anyfile-wiki roots --explain
+anyfile-wiki roots --explain --json
 
 # 给用户或初始化 agent 解释隐私配置
-python -m pfkb privacy --privacy configs/privacy.yaml
-python -m pfkb privacy --privacy configs/privacy.yaml --json
+anyfile-wiki privacy --privacy configs/privacy.yaml
+anyfile-wiki privacy --privacy configs/privacy.yaml --json
 
 # 扫描一个小目录
-python -m pfkb scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
+anyfile-wiki scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
 
 # 查看策略统计
-python -m pfkb status --inventory data/first-scan/inventory.sqlite --sources
+anyfile-wiki status --inventory data/first-scan/inventory.sqlite --sources
 
 # 列出 inventory 记录
-python -m pfkb list --inventory data/first-scan/inventory.sqlite --limit 20
+anyfile-wiki list --inventory data/first-scan/inventory.sqlite --limit 20
 
 # 只看 deny 记录
-python -m pfkb list --inventory data/first-scan/inventory.sqlite --policy deny
+anyfile-wiki list --inventory data/first-scan/inventory.sqlite --policy deny
 
 # 查看单个路径的策略命中原因
-python -m pfkb show "C:\path\to\file.md" --inventory data/first-scan/inventory.sqlite
+anyfile-wiki show "C:\path\to\file.md" --inventory data/first-scan/inventory.sqlite
 
 # 对允许读取的文件执行提取
-python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
+anyfile-wiki extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
 
 # 强制重跑
-python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --force
+anyfile-wiki extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --force
 
 # 只重试最近一次失败或跳过的记录
-python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --retry-failed
+anyfile-wiki extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --retry-failed
 
 # 查看提取状态
-python -m pfkb extracts --inventory data/first-scan/inventory.sqlite --stats
+anyfile-wiki extracts --inventory data/first-scan/inventory.sqlite --stats
 
 # 生成本地规则版知识索引
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze
 
 # 模拟 API/LLM 语义理解，并和规则版结果对比
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-codex --method codex-mock --compare-to data/first-analyze/analysis-manifest.jsonl
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-codex --method codex-mock --compare-to data/first-analyze/analysis-manifest.jsonl
 
 # 查看 LLM/云端隐私策略
-python -m pfkb llm --llm-config configs/llm.example.yaml
+anyfile-wiki llm --llm-config configs/llm.example.yaml
 
 # 使用本地 LLM，例如 Ollama。需要先复制并修改 configs/llm.yaml，把 llm.mode 设为 local，local.enabled 设为 true
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml
 
 # 使用云端 LLM。必须显式设置 cloud.enabled、risk_acknowledged 和 allowed_paths
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml
 
 # 生成人工待整理清单
-python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
+anyfile-wiki review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
 
 # 生成中文 HTML 资产浏览页
-python -m pfkb html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
+anyfile-wiki html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
 ```
 
 ## 项目结构
@@ -154,7 +154,7 @@ docs/
   mvp2-review-llm.md         MVP2.1 LLM 策略与人工待整理清单
   mvp3-html-browser.md       MVP3 HTML 资产浏览页说明
   agent-lifecycle.md         Agent 生命周期与日常运行流程
-src/pfkb/
+src/anyfile_wiki/
   policy.py                  隐私策略引擎
   scan.py                    dry-run 扫描器
   inventory.py               SQLite inventory

@@ -1,4 +1,4 @@
-# PFKB recommended scan roots example.
+# AnyFile Wiki recommended scan roots example.
 #
 # This module lists candidate directories that a user or setup agent can choose
 # from when starting a scan. It does not grant read permission by itself; every

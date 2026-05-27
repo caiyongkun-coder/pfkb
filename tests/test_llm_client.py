@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from pfkb.llm_client import (
+from anyfile_wiki.llm_client import (
     LLMClientError,
     LLMAnalysisRequest,
     build_analysis_messages,

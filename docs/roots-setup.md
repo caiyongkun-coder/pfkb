@@ -8,26 +8,26 @@
 
 - `configs/roots.example.yaml`：推荐扫描入口模板，包含人类注释和 AI 可读说明。
 - `configs/roots.yaml`：用户本机真实推荐目录配置，可由模板复制后修改。
-- `src/pfkb/roots.py`：解析配置、解析本机路径、去重并输出候选目录。
+- `src/anyfile_wiki/roots.py`：解析配置、解析本机路径、去重并输出候选目录。
 
 ## 给用户看的方式
 
 列出当前机器上解析出来且存在的推荐目录：
 
 ```powershell
-python -m pfkb roots
+anyfile-wiki roots
 ```
 
 包含不存在或环境变量未设置的目录：
 
 ```powershell
-python -m pfkb roots --include-missing
+anyfile-wiki roots --include-missing
 ```
 
 解释推荐目录配置本身：
 
 ```powershell
-python -m pfkb roots --explain
+anyfile-wiki roots --explain
 ```
 
 ## 给 agent / 初始化向导读取的方式
@@ -35,7 +35,7 @@ python -m pfkb roots --explain
 输出结构化 JSON：
 
 ```powershell
-python -m pfkb roots --explain --json
+anyfile-wiki roots --explain --json
 ```
 
 这个 JSON 会包含：

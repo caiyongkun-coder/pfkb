@@ -21,16 +21,16 @@
 MVP 0 已启动并完成第一条可运行链路：
 
 - Python 项目骨架已建立。
-- 已实现 `pfkb scan` 和 `pfkb status`。
+- 已实现 `anyfile-wiki scan` 和 `anyfile-wiki status`。
 - 已实现 `privacy.yaml` 风格策略引擎。
 - 已实现默认 `excludes.default.yaml`。
 - 已实现 dry-run 扫描计划、访问日志和 SQLite inventory。
 - 已加入 pytest 规格测试，覆盖隐私策略优先级、默认排除规则和 dry-run 不读取正文。
-- 已实现 inventory 查询能力：`pfkb status`、`pfkb list`、`pfkb show`。
-- 已实现 `pfkb roots`，用于展示推荐个人扫描目录。
+- 已实现 inventory 查询能力：`anyfile-wiki status`、`anyfile-wiki list`、`anyfile-wiki show`。
+- 已实现 `anyfile-wiki roots`，用于展示推荐个人扫描目录。
 - dry-run 报告已包含策略计数和策略来源聚合。
-- 已实现隐私门控后的提取管线：`pfkb extract`、直接文本提取、MarkItDown 可选适配和 extraction manifest。
-- 已实现 extraction result SQLite 持久化和查询：`pfkb extracts`。
+- 已实现隐私门控后的提取管线：`anyfile-wiki extract`、直接文本提取、MarkItDown 可选适配和 extraction manifest。
+- 已实现 extraction result SQLite 持久化和查询：`anyfile-wiki extracts`。
 - 已实现增量提取重跑策略：默认跳过未变化的成功项，支持 `--force` 和 `--retry-failed`。
 
 下一步进入 MVP 0 增强和 MVP 1 前置：
@@ -235,7 +235,7 @@ MVP 0 已启动并完成第一条可运行链路：
 
 - 编写 OpenClaw / Hermes / Codex 可用的 skill。
 - 定义 agent 什么时候搜索、什么时候读摘要、什么时候查看原文件。
-- 封装 `pfkb status/search/ask/summarize/review-deletes/archive-plan` 等命令。
+- 封装 `anyfile-wiki status/search/ask/summarize/review-deletes/archive-plan` 等命令。
 - 对接 GNO MCP 或 CLI。
 
 为什么要自研：
@@ -400,8 +400,8 @@ Agent 执行估算：
 - Docling 可选接入
 - 解析状态表
 - GNO collection / MCP / skill 接入
-- `pfkb search`
-- `pfkb explain-file`
+- `anyfile-wiki search`
+- `anyfile-wiki explain-file`
 
 自研模块：
 
@@ -427,8 +427,8 @@ Agent 执行估算：
 - tags/entity/topic extraction
 - taxonomy 数据结构
 - 静态 Markdown/HTML 资产地图
-- `pfkb tags`
-- `pfkb summarize`
+- `anyfile-wiki tags`
+- `anyfile-wiki summarize`
 
 自研模块：
 
@@ -455,8 +455,8 @@ Agent 执行估算：
 - delete candidates
 - review report
 - manifest 草案
-- `pfkb review-deletes`
-- `pfkb archive-plan`
+- `anyfile-wiki review-deletes`
+- `anyfile-wiki archive-plan`
 
 自研模块：
 

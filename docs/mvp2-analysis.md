@@ -15,33 +15,33 @@ MVP2 的目标是把已经提取出的正文转成第一版知识索引。
 - 生成标题、基础摘要、标签、内容类型、字数、行数。
 - 标记分析方式、规则置信度、是否需要人工复核、复核原因。
 - 输出机器可读 JSONL 和人类可读 Markdown 索引。
-- 可继续通过 `pfkb html` 生成中文 HTML 资产浏览页。
+- 可继续通过 `anyfile-wiki html` 生成中文 HTML 资产浏览页。
 
 ## 使用顺序
 
 先完成扫描和提取：
 
 ```powershell
-python -m pfkb scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
-python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
+anyfile-wiki scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
+anyfile-wiki extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
 ```
 
 然后执行分析：
 
 ```powershell
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze
 ```
 
 如果要给人类浏览这批知识索引，可以继续生成 HTML：
 
 ```powershell
-python -m pfkb html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
+anyfile-wiki html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
 ```
 
 如果要模拟“API/LLM 已经接入”的语义理解结果，可以保留规则版输出，再跑一份 `codex-mock`：
 
 ```powershell
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-codex --method codex-mock --compare-to data/first-analyze/analysis-manifest.jsonl
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-codex --method codex-mock --compare-to data/first-analyze/analysis-manifest.jsonl
 ```
 
 `codex-mock` 不调用外部服务，也不代表真实模型能力。它的作用是先固定未来 API 接入后的数据结构和阅读形态：语义摘要、语义标签、理解要点、模型说明，以及保留下来的规则粗标签。
@@ -49,18 +49,18 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 如果已经配置本地 LLM，例如 Ollama：
 
 ```powershell
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml --tags-config configs/tags.example.yaml
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml --tags-config configs/tags.example.yaml
 ```
 
 如果要使用云端 API，必须先在 `configs/llm.yaml` 中显式设置 `llm.mode: cloud`、`cloud.enabled: true`、`cloud.risk_acknowledged: true` 和 `cloud.allowed_paths`。未授权文件不会上传，会在 `analysis-manifest.jsonl` 中标记为 `status: skipped`。
 
 ```powershell
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml --tags-config configs/tags.example.yaml
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml --tags-config configs/tags.example.yaml
 ```
 
 ## 输出文件
 
-`pfkb analyze` 会输出：
+`anyfile-wiki analyze` 会输出：
 
 - `analysis-manifest.jsonl`：每个分析任务的完整结果，包括错误记录。
 - `knowledge-index.jsonl`：成功分析的知识索引，适合 agent 和后续程序读取。
@@ -68,7 +68,7 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 - `tag-index.md`：人类可读的标签索引。
 - `analysis-comparison.md`：当传入 `--compare-to` 时生成，用来对比规则粗标签和语义理解结果。
 
-`pfkb html` 会额外读取上面的 JSONL，生成：
+`anyfile-wiki html` 会额外读取上面的 JSONL，生成：
 
 - `knowledge-index.html`：中英双语资产浏览页，支持标签树、搜索、筛选、分页文件列表和详情面板。
 
@@ -128,7 +128,7 @@ scan 隐私判断 -> extract 本地提取文本 -> analyze 授权检查 -> LLM A
 可以继续运行：
 
 ```powershell
-python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
+anyfile-wiki review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
 ```
 
 生成 `human-review.md`，把规则版低置信度、无法读取、无法提取、云端未授权的文件列出来。

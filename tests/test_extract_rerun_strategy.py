@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from pfkb.cli import main as cli_main
-from pfkb.inventory import Inventory
-from pfkb.parse import ExtractResult
-from pfkb.policy import AccessDecision
-from pfkb.scan import ScanEntry
+from anyfile_wiki.cli import main as cli_main
+from anyfile_wiki.inventory import Inventory
+from anyfile_wiki.parse import ExtractResult
+from anyfile_wiki.policy import AccessDecision
+from anyfile_wiki.scan import ScanEntry
 
 
 def _decision(path: Path, access_policy: str = "allow") -> AccessDecision:

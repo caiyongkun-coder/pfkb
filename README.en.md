@@ -1,8 +1,8 @@
-# PFKB: Personal File Knowledge Base
+# AnyFile Wiki
 
 [中文](README.md) | English
 
-PFKB (Personal File Knowledge Base) is a local-first knowledge base for personal computer files. Its goal is to let local agents such as OpenClaw, Hermes, Codex, and similar tools safely inventory personal files during idle time, then gradually turn documents, notes, PDFs, spreadsheets, code, and app data into searchable, browsable, reusable knowledge assets.
+AnyFile Wiki is a local-first knowledge base for personal computer files. Its goal is to let local agents such as OpenClaw, Hermes, Codex, and similar tools safely inventory personal files during idle time, then gradually turn documents, notes, PDFs, spreadsheets, code, and app data into searchable, browsable, reusable knowledge assets.
 
 The project is currently at MVP0: solve "what is safe to touch" before parsing, summarizing, tagging, indexing, or compiling knowledge.
 
@@ -16,7 +16,7 @@ Personal computers accumulate valuable files over time, but many of them become 
 - Can an agent retrieve my local knowledge before working?
 - Can a human browse their digital assets through tags, topics, projects, timelines, and wiki-like pages?
 
-PFKB is meant to be a knowledge governance layer over the local filesystem, not just another RAG chat app.
+AnyFile Wiki is meant to be a knowledge governance layer over the local filesystem, not just another RAG chat app.
 
 ## Current Capabilities
 
@@ -28,20 +28,20 @@ PFKB is meant to be a knowledge governance layer over the local filesystem, not 
 - Default excludes for system folders, developer noise, dangerous extensions, installers, caches, and temporary files.
 - Dry-run scanning that only traverses paths and metadata; it does not read file bodies.
 - Outputs `scan-plan.md`, `access-log.jsonl`, and `inventory.sqlite`.
-- CLI commands: `pfkb privacy`, `pfkb status`, `pfkb list`, `pfkb show`, `pfkb roots`, `pfkb tags`.
-- `pfkb extract` for files allowed by policy.
-- `pfkb extracts` for persisted extraction results and status counts.
+- CLI commands: `anyfile-wiki privacy`, `anyfile-wiki status`, `anyfile-wiki list`, `anyfile-wiki show`, `anyfile-wiki roots`, `anyfile-wiki tags`.
+- `anyfile-wiki extract` for files allowed by policy.
+- `anyfile-wiki extracts` for persisted extraction results and status counts.
 - Incremental extraction: unchanged successful sources are skipped by default, with `--force` and `--retry-failed` available.
-- `pfkb analyze` for local rule-based summaries, tags, and knowledge indexes from extracted text; `--method codex-mock`, `--method local-llm`, and `--method cloud-llm` are supported.
+- `anyfile-wiki analyze` for local rule-based summaries, tags, and knowledge indexes from extracted text; `--method codex-mock`, `--method local-llm`, and `--method cloud-llm` are supported.
 - Real LLM/API analysis only receives privacy-gated extracted text; cloud mode also requires explicit allowed paths and risk acknowledgement.
-- `pfkb llm` for explaining local/cloud model policy and cloud-read boundaries.
-- `pfkb review` for human review lists covering unreadable, unsupported, low-confidence, or cloud-unauthorized files.
-- `pfkb html` for turning `knowledge-index.jsonl` into a local Chinese/English asset browser with a tag tree, pagination, filters, search, and file details.
+- `anyfile-wiki llm` for explaining local/cloud model policy and cloud-read boundaries.
+- `anyfile-wiki review` for human review lists covering unreadable, unsupported, low-confidence, or cloud-unauthorized files.
+- `anyfile-wiki html` for turning `knowledge-index.jsonl` into a local Chinese/English asset browser with a tag tree, pagination, filters, search, and file details.
 - Direct text extraction is supported; MarkItDown is an optional parser dependency.
 
 ## Quick Start
 
-The recommended contributor setup is an editable install. This lets `python -m pfkb ...` find the package under the `src/` layout from normal working directories:
+The recommended contributor setup is an editable install. This makes the `anyfile-wiki ...` command available from normal working directories:
 
 ```powershell
 python -m pip install -e .[dev]
@@ -50,91 +50,91 @@ if (-not (Test-Path configs/privacy.yaml)) {
     Copy-Item configs/privacy.example.yaml configs/privacy.yaml
 }
 
-New-Item -ItemType Directory -Force "$env:TEMP\pfkb-mvp0-smoke" | Out-Null
-"hello from pfkb" | Set-Content -Encoding UTF8 "$env:TEMP\pfkb-mvp0-smoke\note.txt"
+New-Item -ItemType Directory -Force "$env:TEMP\anyfile-wiki-mvp0-smoke" | Out-Null
+"hello from AnyFile Wiki" | Set-Content -Encoding UTF8 "$env:TEMP\anyfile-wiki-mvp0-smoke\note.txt"
 
-python -m pfkb scan "$env:TEMP\pfkb-mvp0-smoke" --privacy configs/privacy.yaml --out data/smoke --max-entries 50
-python -m pfkb status --inventory data/smoke/inventory.sqlite --sources
-python -m pfkb list --inventory data/smoke/inventory.sqlite
-python -m pfkb tags --tags-config configs/tags.example.yaml --dimension topic
-python -m pfkb extract --inventory data/smoke/inventory.sqlite --out data/smoke-extract
-python -m pfkb extracts --inventory data/smoke/inventory.sqlite --stats
-python -m pfkb analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze
-python -m pfkb analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze-codex --method codex-mock --compare-to data/smoke-analyze/analysis-manifest.jsonl
-python -m pfkb review --inventory data/smoke/inventory.sqlite --analysis data/smoke-analyze/analysis-manifest.jsonl --out data/smoke-review
-python -m pfkb html --analysis data/smoke-analyze/knowledge-index.jsonl --out data/smoke-html
+anyfile-wiki scan "$env:TEMP\anyfile-wiki-mvp0-smoke" --privacy configs/privacy.yaml --out data/smoke --max-entries 50
+anyfile-wiki status --inventory data/smoke/inventory.sqlite --sources
+anyfile-wiki list --inventory data/smoke/inventory.sqlite
+anyfile-wiki tags --tags-config configs/tags.example.yaml --dimension topic
+anyfile-wiki extract --inventory data/smoke/inventory.sqlite --out data/smoke-extract
+anyfile-wiki extracts --inventory data/smoke/inventory.sqlite --stats
+anyfile-wiki analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze
+anyfile-wiki analyze --inventory data/smoke/inventory.sqlite --out data/smoke-analyze-codex --method codex-mock --compare-to data/smoke-analyze/analysis-manifest.jsonl
+anyfile-wiki review --inventory data/smoke/inventory.sqlite --analysis data/smoke-analyze/analysis-manifest.jsonl --out data/smoke-review
+anyfile-wiki html --analysis data/smoke-analyze/knowledge-index.jsonl --out data/smoke-html
 ```
 
-If you do not install the package and only want to run the CLI temporarily from the source tree, set `PYTHONPATH` in the current PowerShell session first. Without this, commands such as `python -m pfkb analyze --help` can fail with `No module named pfkb`:
+If you do not install the package and only want to run the CLI temporarily from the source tree, set `PYTHONPATH` in the current PowerShell session first, then run the package module directly:
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python -m pfkb analyze --help
+python -m anyfile_wiki analyze --help
 ```
 
-In MVP0, `pfkb scan` is a dry-run: it creates an access plan and an inventory, but it does not read file content, summarize files, or write vectors.
+In MVP0, `anyfile-wiki scan` is a dry-run: it creates an access plan and an inventory, but it does not read file content, summarize files, or write vectors.
 
 ## Common Commands
 
 ```powershell
 # Show suggested personal scan roots
-python -m pfkb roots --include-missing
+anyfile-wiki roots --include-missing
 
 # Explain recommended scan roots config
-python -m pfkb roots --explain
-python -m pfkb roots --explain --json
+anyfile-wiki roots --explain
+anyfile-wiki roots --explain --json
 
 # Explain the privacy policy for a user or setup agent
-python -m pfkb privacy --privacy configs/privacy.yaml
-python -m pfkb privacy --privacy configs/privacy.yaml --json
+anyfile-wiki privacy --privacy configs/privacy.yaml
+anyfile-wiki privacy --privacy configs/privacy.yaml --json
 
 # Scan a small target first
-python -m pfkb scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
+anyfile-wiki scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
 
 # Show policy counts and policy sources
-python -m pfkb status --inventory data/first-scan/inventory.sqlite --sources
+anyfile-wiki status --inventory data/first-scan/inventory.sqlite --sources
 
 # List inventory records
-python -m pfkb list --inventory data/first-scan/inventory.sqlite --limit 20
+anyfile-wiki list --inventory data/first-scan/inventory.sqlite --limit 20
 
 # Show denied records only
-python -m pfkb list --inventory data/first-scan/inventory.sqlite --policy deny
+anyfile-wiki list --inventory data/first-scan/inventory.sqlite --policy deny
 
 # Explain the policy decision for one path
-python -m pfkb show "C:\path\to\file.md" --inventory data/first-scan/inventory.sqlite
+anyfile-wiki show "C:\path\to\file.md" --inventory data/first-scan/inventory.sqlite
 
 # Extract content from files allowed by policy
-python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
+anyfile-wiki extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
 
 # Force re-extraction
-python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --force
+anyfile-wiki extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --force
 
 # Retry only records whose latest extraction failed or skipped
-python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --retry-failed
+anyfile-wiki extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --retry-failed
 
 # Show extraction status
-python -m pfkb extracts --inventory data/first-scan/inventory.sqlite --stats
+anyfile-wiki extracts --inventory data/first-scan/inventory.sqlite --stats
 
 # Build a local rule-based knowledge index
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze
 
 # Simulate an API/LLM semantic pass and compare it with the rule-based result
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-codex --method codex-mock --compare-to data/first-analyze/analysis-manifest.jsonl
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-codex --method codex-mock --compare-to data/first-analyze/analysis-manifest.jsonl
 
 # Explain local/cloud LLM privacy policy
-python -m pfkb llm --llm-config configs/llm.example.yaml
+anyfile-wiki llm --llm-config configs/llm.example.yaml
 
 # Use a local LLM such as Ollama. First copy and edit configs/llm.yaml: set llm.mode to local and local.enabled to true
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml
 
 # Use a cloud LLM. You must explicitly set cloud.enabled, risk_acknowledged, and allowed_paths
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml
 
 # Write the human review list
-python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
+anyfile-wiki review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
 
 # Build the Chinese local HTML asset browser
-python -m pfkb html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
+anyfile-wiki html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
 ```
 
 ## Project Layout
@@ -156,7 +156,7 @@ docs/
   mvp2-review-llm.md         MVP2.1 LLM policy and human review guide
   mvp3-html-browser.md       MVP3 HTML asset browser guide
   agent-lifecycle.md         Agent lifecycle and daily run guide
-src/pfkb/
+src/anyfile_wiki/
   policy.py                  Privacy policy engine
   scan.py                    Dry-run scanner
   inventory.py               SQLite inventory

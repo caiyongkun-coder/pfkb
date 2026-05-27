@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from pfkb.policy import AccessDecision
-from pfkb.scan import ScanEntry, ScanResult, ScanStats
+from anyfile_wiki.policy import AccessDecision
+from anyfile_wiki.scan import ScanEntry, ScanResult, ScanStats
 
 
 POLICIES = ("allow", "metadata_only", "no_embedding", "deny")
@@ -20,30 +20,30 @@ POLICIES = ("allow", "metadata_only", "no_embedding", "deny")
 
 def _inventory_module():
     try:
-        return importlib.import_module("pfkb.inventory")
+        return importlib.import_module("anyfile_wiki.inventory")
     except ModuleNotFoundError as exc:
-        pytest.fail(f"Expected pfkb.inventory to be importable: {exc}")
+        pytest.fail(f"Expected anyfile_wiki.inventory to be importable: {exc}")
 
 
 def _cli_module():
     try:
-        return importlib.import_module("pfkb.cli")
+        return importlib.import_module("anyfile_wiki.cli")
     except ModuleNotFoundError as exc:
-        pytest.fail(f"Expected pfkb.cli to be importable: {exc}")
+        pytest.fail(f"Expected anyfile_wiki.cli to be importable: {exc}")
 
 
 def _report_module():
     try:
-        return importlib.import_module("pfkb.report")
+        return importlib.import_module("anyfile_wiki.report")
     except ModuleNotFoundError as exc:
-        pytest.fail(f"Expected pfkb.report to be importable: {exc}")
+        pytest.fail(f"Expected anyfile_wiki.report to be importable: {exc}")
 
 
 def _roots_module():
     try:
-        return importlib.import_module("pfkb.roots")
+        return importlib.import_module("anyfile_wiki.roots")
     except ModuleNotFoundError as exc:
-        pytest.fail(f"Expected pfkb.roots to expose candidate root discovery: {exc}")
+        pytest.fail(f"Expected anyfile_wiki.roots to expose candidate root discovery: {exc}")
 
 
 def _decision(path: Path, access_policy: str) -> AccessDecision:

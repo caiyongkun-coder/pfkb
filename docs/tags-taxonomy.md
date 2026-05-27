@@ -1,6 +1,6 @@
 # 标签体系说明
 
-PFKB 的标签体系不只是一串关键词。它继承了几个成熟工具里已经被验证过的做法：
+AnyFile Wiki 的标签体系不只是一串关键词。它继承了几个成熟工具里已经被验证过的做法：
 
 - Paperless-ngx：文档类型、相关方、标签、全文搜索。
 - Zotero：collection 做层级，tags 做细节，自动标签和人工标签分开。
@@ -14,15 +14,15 @@ PFKB 的标签体系不只是一串关键词。它继承了几个成熟工具里
 
 - `configs/tags.example.yaml`：默认标签体系模板。
 - `configs/tags.yaml`：用户本机可复制后自定义的真实标签体系，不应提交个人化内容。
-- `src/pfkb/tags.py`：标签配置读取、说明、别名归一化和格式化。
+- `src/anyfile_wiki/tags.py`：标签配置读取、说明、别名归一化和格式化。
 
 ## 查看标签体系
 
 ```powershell
-python -m pfkb tags --tags-config configs/tags.example.yaml
-python -m pfkb tags --tags-config configs/tags.example.yaml --json
-python -m pfkb tags --tags-config configs/tags.example.yaml --dimension topic
-python -m pfkb tags --tags-config configs/tags.example.yaml --search privacy
+anyfile-wiki tags --tags-config configs/tags.example.yaml
+anyfile-wiki tags --tags-config configs/tags.example.yaml --json
+anyfile-wiki tags --tags-config configs/tags.example.yaml --dimension topic
+anyfile-wiki tags --tags-config configs/tags.example.yaml --search privacy
 ```
 
 ## 设计结构

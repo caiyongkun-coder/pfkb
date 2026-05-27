@@ -18,14 +18,14 @@
 直接查看当前模板或本机配置：
 
 ```powershell
-python -m pfkb privacy --privacy configs/privacy.example.yaml
-python -m pfkb privacy --privacy configs/privacy.yaml
+anyfile-wiki privacy --privacy configs/privacy.example.yaml
+anyfile-wiki privacy --privacy configs/privacy.yaml
 ```
 
 只看说明和规则数量，不展开全部规则：
 
 ```powershell
-python -m pfkb privacy --privacy configs/privacy.yaml --no-rules
+anyfile-wiki privacy --privacy configs/privacy.yaml --no-rules
 ```
 
 ## 给 agent / 初始化向导读取的方式
@@ -33,7 +33,7 @@ python -m pfkb privacy --privacy configs/privacy.yaml --no-rules
 输出结构化 JSON：
 
 ```powershell
-python -m pfkb privacy --privacy configs/privacy.yaml --json
+anyfile-wiki privacy --privacy configs/privacy.yaml --json
 ```
 
 这个 JSON 会包含：
@@ -73,8 +73,8 @@ Copy-Item configs/privacy.example.yaml configs/privacy.yaml
 6. 先 dry-run：
 
 ```powershell
-python -m pfkb scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
-python -m pfkb status --inventory data/first-scan/inventory.sqlite --sources
+anyfile-wiki scan "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/first-scan --max-entries 500
+anyfile-wiki status --inventory data/first-scan/inventory.sqlite --sources
 ```
 
 确认 dry-run 报告后，再进入正文提取、摘要和索引阶段。

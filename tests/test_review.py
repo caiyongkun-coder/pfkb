@@ -5,13 +5,13 @@ import io
 import json
 from pathlib import Path
 
-from pfkb.cli import main as cli_main
-from pfkb.inventory import Inventory
-from pfkb.llm_config import cloud_allowed_for_path, describe_llm_config, endpoint_is_loopback, local_allowed_for_config
-from pfkb.parse import ExtractResult
-from pfkb.policy import AccessDecision
-from pfkb.review import build_review_items
-from pfkb.scan import ScanEntry
+from anyfile_wiki.cli import main as cli_main
+from anyfile_wiki.inventory import Inventory
+from anyfile_wiki.llm_config import cloud_allowed_for_path, describe_llm_config, endpoint_is_loopback, local_allowed_for_config
+from anyfile_wiki.parse import ExtractResult
+from anyfile_wiki.policy import AccessDecision
+from anyfile_wiki.review import build_review_items
+from anyfile_wiki.scan import ScanEntry
 
 
 def _decision(path: Path, access_policy: str) -> AccessDecision:

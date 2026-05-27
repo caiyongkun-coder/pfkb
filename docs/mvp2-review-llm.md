@@ -16,8 +16,8 @@ configs/llm.example.yaml
 查看当前策略：
 
 ```powershell
-python -m pfkb llm --llm-config configs/llm.example.yaml
-python -m pfkb llm --llm-config configs/llm.example.yaml --json
+anyfile-wiki llm --llm-config configs/llm.example.yaml
+anyfile-wiki llm --llm-config configs/llm.example.yaml --json
 ```
 
 默认模式是：
@@ -49,11 +49,11 @@ cloud:
 
 ## 真实 LLM/API 分析
 
-真实 API 模式已经接入 `pfkb analyze`：
+真实 API 模式已经接入 `anyfile-wiki analyze`：
 
 ```powershell
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml
-python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-local --method local-llm --llm-config configs/llm.yaml
+anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-cloud --method cloud-llm --llm-config configs/llm.yaml
 ```
 
 它不会让 API 直接访问本地原始文件。流程是：
@@ -84,7 +84,7 @@ python -m pfkb analyze --inventory data/first-scan/inventory.sqlite --out data/f
 生成清单：
 
 ```powershell
-python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
+anyfile-wiki review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
 ```
 
 输出：
@@ -110,7 +110,7 @@ python -m pfkb review --inventory data/first-scan/inventory.sqlite --analysis da
 随着文件数量增加，只靠 Markdown 会越来越难翻阅。当前已经先实现只读资产浏览页：
 
 ```powershell
-python -m pfkb html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
+anyfile-wiki html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
 ```
 
 - `knowledge-index.html`：给人按标签、内容类型、分析方式和复核状态逐层浏览知识库。
@@ -138,4 +138,4 @@ python -m pfkb html --analysis data/first-analyze/knowledge-index.jsonl --out da
 - `needs_human_review`
 - `review_reason`
 
-这些字段会被 `pfkb review` 用来生成待整理清单。真实 LLM 模式会把 `analysis_method` 写成 `local-llm` 或 `cloud-llm`，并把置信度、复核原因和模型说明写入同一套输出文件。
+这些字段会被 `anyfile-wiki review` 用来生成待整理清单。真实 LLM 模式会把 `analysis_method` 写成 `local-llm` 或 `cloud-llm`，并把置信度、复核原因和模型说明写入同一套输出文件。

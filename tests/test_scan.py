@@ -11,9 +11,9 @@ import pytest
 
 def _scan_module():
     try:
-        return importlib.import_module("pfkb.scan")
+        return importlib.import_module("anyfile_wiki.scan")
     except ModuleNotFoundError as exc:
-        pytest.fail(f"Expected pfkb.scan to be importable for MVP0 scan tests: {exc}")
+        pytest.fail(f"Expected anyfile_wiki.scan to be importable for MVP0 scan tests: {exc}")
 
 
 def _to_text(value) -> str | None:

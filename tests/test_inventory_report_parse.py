@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pfkb.inventory import Inventory
-from pfkb.parse import build_parse_jobs
-from pfkb.policy import PolicyEngine
-from pfkb.report import summarize_by_policy, write_scan_plan
-from pfkb.roots import discover_candidate_roots
-from pfkb.scan import scan_paths
+from anyfile_wiki.inventory import Inventory
+from anyfile_wiki.parse import build_parse_jobs
+from anyfile_wiki.policy import PolicyEngine
+from anyfile_wiki.report import summarize_by_policy, write_scan_plan
+from anyfile_wiki.roots import discover_candidate_roots
+from anyfile_wiki.scan import scan_paths
 
 
 def test_inventory_lists_and_fetches_scanned_records(tmp_path):

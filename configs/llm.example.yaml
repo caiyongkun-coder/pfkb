@@ -1,4 +1,4 @@
-# PFKB LLM policy example.
+# AnyFile Wiki LLM policy example.
 #
 # This module controls whether content understanding uses only local rules,
 # a local LLM, or a cloud LLM. The default is intentionally conservative:

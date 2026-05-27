@@ -5,8 +5,8 @@ import io
 import json
 from pathlib import Path
 
-from pfkb.cli import main as cli_main
-from pfkb.html import load_browser_records, render_knowledge_browser_html, write_knowledge_browser_html
+from anyfile_wiki.cli import main as cli_main
+from anyfile_wiki.html import load_browser_records, render_knowledge_browser_html, write_knowledge_browser_html
 
 
 def _run_cli(argv: list[str]) -> tuple[int, str, str]:
@@ -80,7 +80,7 @@ def _tags_config() -> dict:
 def test_render_knowledge_browser_html_uses_chinese_ui_and_embedded_data():
     html = render_knowledge_browser_html([_record()], tags_config=_tags_config(), source_path="analysis.jsonl")
 
-    assert "PFKB 资产浏览" in html
+    assert "AnyFile Wiki 资产浏览" in html
     assert "Asset browser" in html
     assert "标签树" in html
     assert "Tag tree" in html
@@ -120,7 +120,7 @@ def test_write_knowledge_browser_html_creates_static_asset_browser(tmp_path):
     assert html_path == out_dir / "knowledge-index.html"
     assert html_path.exists()
     text = html_path.read_text(encoding="utf-8")
-    assert "PFKB_DATA" in text
+    assert "ANYFILE_WIKI_DATA" in text
     assert "复制路径" in text
 
 

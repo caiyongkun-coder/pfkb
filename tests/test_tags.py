@@ -5,8 +5,8 @@ import io
 import json
 from pathlib import Path
 
-from pfkb.cli import main as cli_main
-from pfkb.tags import TagRegistry, describe_tags_config, load_tags_config
+from anyfile_wiki.cli import main as cli_main
+from anyfile_wiki.tags import TagRegistry, describe_tags_config, load_tags_config
 
 
 def _run_cli(argv: list[str]) -> tuple[int, str, str]:

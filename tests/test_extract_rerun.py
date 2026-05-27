@@ -5,10 +5,10 @@ import io
 import json
 from pathlib import Path
 
-from pfkb.cli import main as cli_main
-from pfkb.inventory import Inventory
-from pfkb.policy import PolicyEngine
-from pfkb.scan import scan_paths
+from anyfile_wiki.cli import main as cli_main
+from anyfile_wiki.inventory import Inventory
+from anyfile_wiki.policy import PolicyEngine
+from anyfile_wiki.scan import scan_paths
 
 
 def _run_cli(argv: list[str]) -> tuple[int, str, str]:

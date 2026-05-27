@@ -24,7 +24,7 @@ from .tags import describe_tags_config, filter_tags, load_tags_config, tag_defin
 
 
 def build_parser() -> ArgumentParser:
-    parser = ArgumentParser(prog="pfkb", description="Personal File Knowledge Base MVP0 CLI")
+    parser = ArgumentParser(prog="anyfile-wiki", description="AnyFile Wiki MVP0 CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     scan = subparsers.add_parser("scan", help="Create a privacy-first dry-run scan plan")

@@ -1,4 +1,4 @@
-"""Personal File Knowledge Base MVP0 package."""
+"""AnyFile Wiki MVP0 package."""
 
 __all__ = ["__version__"]
 

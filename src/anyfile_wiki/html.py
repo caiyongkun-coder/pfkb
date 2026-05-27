@@ -57,7 +57,7 @@ def render_knowledge_browser_html(
         "stats": _stats_payload(normalized),
     }
     data_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    return _HTML_TEMPLATE.replace("__PFKB_DATA__", data_json)
+    return _HTML_TEMPLATE.replace("__ANYFILE_WIKI_DATA__", data_json)
 
 
 def _normalize_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -161,7 +161,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PFKB 资产浏览</title>
+  <title>AnyFile Wiki 资产浏览</title>
   <style>
     :root {
       --bg: #f5f7fa;
@@ -821,7 +821,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <h1>PFKB 资产浏览 <span class="title-en">Asset browser</span></h1>
+        <h1>AnyFile Wiki 资产浏览 <span class="title-en">Asset browser</span></h1>
         <div class="source" id="sourceLine"></div>
       </div>
       <div class="metrics" aria-label="知识库统计 / Knowledge base statistics">
@@ -883,7 +883,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
   </div>
 
   <script>
-    const PFKB_DATA = __PFKB_DATA__;
+    const ANYFILE_WIKI_DATA = __ANYFILE_WIKI_DATA__;
 
     const labels = {
       dimensions: {
@@ -916,8 +916,8 @@ _HTML_TEMPLATE = r"""<!doctype html>
       }
     };
 
-    const tagById = new Map((PFKB_DATA.tags || []).map((tag) => [tag.id, tag]));
-    const dimensionById = new Map((PFKB_DATA.dimensions || []).map((dimension) => [dimension.id, dimension]));
+    const tagById = new Map((ANYFILE_WIKI_DATA.tags || []).map((tag) => [tag.id, tag]));
+    const dimensionById = new Map((ANYFILE_WIKI_DATA.dimensions || []).map((dimension) => [dimension.id, dimension]));
     const state = {
       query: "",
       sort: "title",
@@ -1045,7 +1045,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
         if (!grouped.has(filter.kind)) grouped.set(filter.kind, []);
         grouped.get(filter.kind).push(filter);
       }
-      const records = (PFKB_DATA.records || []).filter((record) => {
+      const records = (ANYFILE_WIKI_DATA.records || []).filter((record) => {
         if (query && !searchText(record).includes(query)) return false;
         for (const filters of grouped.values()) {
           if (!filters.some((filter) => matchesFilter(record, filter))) return false;
@@ -1088,15 +1088,15 @@ _HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function renderHeader(records, pageRecords, pageCount) {
-      const total = (PFKB_DATA.records || []).length;
-      const reviewTotal = (PFKB_DATA.records || []).filter((record) => record.needs_human_review).length;
+      const total = (ANYFILE_WIKI_DATA.records || []).length;
+      const reviewTotal = (ANYFILE_WIKI_DATA.records || []).filter((record) => record.needs_human_review).length;
       const firstItem = records.length ? (state.page - 1) * state.pageSize + 1 : 0;
       const lastItem = records.length ? firstItem + pageRecords.length - 1 : 0;
       document.getElementById("totalCount").textContent = total;
       document.getElementById("visibleCount").textContent = records.length;
       document.getElementById("reviewCount").textContent = reviewTotal;
-      const source = PFKB_DATA.source_path ? `来源 / Source：${PFKB_DATA.source_path}` : "来源 / Source：当前 HTML 内嵌知识索引数据";
-      document.getElementById("sourceLine").textContent = `${source} · 生成时间 / Generated：${PFKB_DATA.generated_at || ""}`;
+      const source = ANYFILE_WIKI_DATA.source_path ? `来源 / Source：${ANYFILE_WIKI_DATA.source_path}` : "来源 / Source：当前 HTML 内嵌知识索引数据";
+      document.getElementById("sourceLine").textContent = `${source} · 生成时间 / Generated：${ANYFILE_WIKI_DATA.generated_at || ""}`;
       document.getElementById("resultLine").textContent = `文件列表 / File list：${firstItem}-${lastItem} / ${records.length}（全部 / Total ${total}）`;
       document.getElementById("filterLine").textContent = state.filters.length ? `已选筛选 / Active filters：${state.filters.length}` : `每页 / Page size：${state.pageSize}`;
       document.getElementById("pageLine").textContent = `第 ${state.page} / ${pageCount} 页 · Page ${state.page} of ${pageCount}`;
@@ -1133,7 +1133,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function renderFacets(filteredRecords) {
-      const allRecords = PFKB_DATA.records || [];
+      const allRecords = ANYFILE_WIKI_DATA.records || [];
       const tagCounts = new CounterLike();
       const typeCounts = new CounterLike();
       const methodCounts = new CounterLike();
