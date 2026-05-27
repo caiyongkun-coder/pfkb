@@ -30,6 +30,7 @@ PFKB is meant to be a knowledge governance layer over the local filesystem, not 
 - CLI commands: `pfkb status`, `pfkb list`, `pfkb show`, `pfkb roots`.
 - `pfkb extract` for files allowed by policy.
 - `pfkb extracts` for persisted extraction results and status counts.
+- Incremental extraction: unchanged successful sources are skipped by default, with `--force` and `--retry-failed` available.
 - Direct text extraction is supported; MarkItDown is an optional parser dependency.
 
 ## Quick Start
@@ -76,6 +77,12 @@ python -m pfkb show "C:\path\to\file.md" --inventory data/first-scan/inventory.s
 
 # Extract content from files allowed by policy
 python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
+
+# Force re-extraction
+python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --force
+
+# Retry only records whose latest extraction failed or skipped
+python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --retry-failed
 
 # Show extraction status
 python -m pfkb extracts --inventory data/first-scan/inventory.sqlite --stats
@@ -143,6 +150,7 @@ Current tests cover:
 - Parser-job policy gating.
 - Direct text extraction and extraction manifests.
 - SQLite persistence and querying for extraction results.
+- Incremental extraction, forced reruns, and failed/skipped retry strategy.
 
 ## Docs
 
@@ -150,6 +158,7 @@ Current tests cover:
 - [Development Plan](DEVELOPMENT_PLAN.md)
 - [Configuration Guide](docs/configuration.md)
 - [MVP0 Usage Guide](docs/mvp0-usage.md)
+- [MVP1 Extraction Guide](docs/mvp1-extraction.md)
 
 ## License
 

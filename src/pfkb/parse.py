@@ -45,6 +45,8 @@ class ParseJob:
     reason: str
     embedding_allowed: bool
     source_policy: str = "allow"
+    source_size_bytes: int | None = None
+    source_mtime: float | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,16 @@ class ExtractResult:
     error: str | None
     embedding_allowed: bool
     created_at: str
+    source_size_bytes: int | None = None
+    source_mtime: float | None = None
+    output_sha256: str | None = None
+    skip_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ExtractPlan:
+    jobs: list[ParseJob]
+    skipped: list[ExtractResult]
 
 
 def build_parse_jobs(entries: list[ScanEntry]) -> list[ParseJob]:
@@ -76,13 +88,29 @@ def build_parse_jobs(entries: list[ScanEntry]) -> list[ParseJob]:
                 reason=f"{decision.access_policy}: {decision.reason}",
                 embedding_allowed=decision.is_embedding_allowed,
                 source_policy=decision.access_policy,
+                source_size_bytes=entry.size_bytes,
+                source_mtime=entry.mtime,
             )
         )
     return jobs
 
 
 def build_parse_jobs_from_records(records: list[dict]) -> list[ParseJob]:
+    return plan_parse_jobs_from_records(records).jobs
+
+
+def plan_parse_jobs_from_records(
+    records: list[dict],
+    *,
+    latest_success_by_path: dict[str, dict] | None = None,
+    latest_by_path: dict[str, dict] | None = None,
+    force: bool = False,
+    retry_failed: bool = False,
+) -> ExtractPlan:
+    latest_success_by_path = latest_success_by_path or {}
+    latest_by_path = latest_by_path or {}
     jobs: list[ParseJob] = []
+    skipped: list[ExtractResult] = []
     for record in records:
         if record.get("is_dir"):
             continue
@@ -91,16 +119,35 @@ def build_parse_jobs_from_records(records: list[dict]) -> list[ParseJob]:
         parser = choose_parser(str(record.get("extension", "")))
         if parser is None:
             continue
-        jobs.append(
-            ParseJob(
-                path=Path(str(record["path"])),
-                parser=parser,
-                reason=f"{record.get('access_policy')}: {record.get('policy_reason', '')}",
-                embedding_allowed=bool(record.get("is_embedding_allowed")),
-                source_policy=str(record.get("access_policy", "allow")),
-            )
+        job = ParseJob(
+            path=Path(str(record["path"])),
+            parser=parser,
+            reason=f"{record.get('access_policy')}: {record.get('policy_reason', '')}",
+            embedding_allowed=bool(record.get("is_embedding_allowed")),
+            source_policy=str(record.get("access_policy", "allow")),
+            source_size_bytes=_optional_int(record.get("size_bytes")),
+            source_mtime=_optional_float(record.get("mtime")),
         )
-    return jobs
+        latest = latest_by_path.get(str(job.path))
+        latest_success = latest_success_by_path.get(str(job.path))
+
+        if retry_failed:
+            if latest and latest.get("status") in {"error", "skipped"}:
+                jobs.append(job)
+            else:
+                skipped.append(_skip_result(job, latest_success, "retry_failed filter"))
+            continue
+
+        if force:
+            jobs.append(job)
+            continue
+
+        if latest_success and _same_source(job, latest_success):
+            skipped.append(_skip_result(job, latest_success, "source unchanged"))
+            continue
+
+        jobs.append(job)
+    return ExtractPlan(jobs=jobs, skipped=skipped)
 
 
 def choose_parser(extension: str) -> str | None:
@@ -174,6 +221,25 @@ def _result(job: ParseJob, status: str, output_path: Path | None, error: str | N
         error=error,
         embedding_allowed=job.embedding_allowed,
         created_at=datetime.now(timezone.utc).isoformat(),
+        source_size_bytes=job.source_size_bytes,
+        source_mtime=job.source_mtime,
+        output_sha256=_sha256_file(output_path) if output_path and output_path.exists() else None,
+    )
+
+
+def _skip_result(job: ParseJob, latest_success: dict | None, reason: str) -> ExtractResult:
+    return ExtractResult(
+        path=str(job.path),
+        parser=job.parser,
+        status="up_to_date",
+        output_path=str(latest_success.get("output_path")) if latest_success and latest_success.get("output_path") else None,
+        error=None,
+        embedding_allowed=job.embedding_allowed,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        source_size_bytes=job.source_size_bytes,
+        source_mtime=job.source_mtime,
+        output_sha256=str(latest_success.get("output_sha256")) if latest_success and latest_success.get("output_sha256") else None,
+        skip_reason=reason,
     )
 
 
@@ -195,3 +261,32 @@ def _artifact_name(path: Path) -> str:
     digest = hashlib.sha256(str(path.resolve()).encode("utf-8", errors="ignore")).hexdigest()[:16]
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", path.stem).strip("._") or "file"
     return f"{digest}-{stem}.md"
+
+
+def _same_source(job: ParseJob, latest: dict) -> bool:
+    return (
+        latest.get("parser") == job.parser
+        and _optional_int(latest.get("source_size_bytes")) == job.source_size_bytes
+        and _optional_float(latest.get("source_mtime")) == job.source_mtime
+        and bool(latest.get("output_path"))
+    )
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _optional_int(value) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
+def _optional_float(value) -> float | None:
+    if value is None:
+        return None
+    return float(value)

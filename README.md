@@ -30,6 +30,7 @@ PFKB 想做的是本地文件系统上的“知识治理层”，而不是又一
 - 提供 `pfkb status`、`pfkb list`、`pfkb show`、`pfkb roots`。
 - 提供 `pfkb extract`，只对策略允许读取的文件执行提取。
 - 提供 `pfkb extracts`，查看持久化的提取结果和状态统计。
+- 支持增量提取：默认跳过源文件未变化的成功项，支持 `--force` 和 `--retry-failed`。
 - 支持直接文本提取；MarkItDown 是可选解析依赖。
 
 ## 快速开始
@@ -76,6 +77,12 @@ python -m pfkb show "C:\path\to\file.md" --inventory data/first-scan/inventory.s
 
 # 对允许读取的文件执行提取
 python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract
+
+# 强制重跑
+python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --force
+
+# 只重试最近一次失败或跳过的记录
+python -m pfkb extract --inventory data/first-scan/inventory.sqlite --out data/first-extract --retry-failed
 
 # 查看提取状态
 python -m pfkb extracts --inventory data/first-scan/inventory.sqlite --stats
@@ -143,6 +150,7 @@ python -m pytest -q
 - 解析任务策略门控。
 - 直接文本提取和 extraction manifest。
 - extraction result SQLite 持久化和查询。
+- 增量提取、强制重跑和失败重试策略。
 
 ## 文档
 
@@ -150,6 +158,7 @@ python -m pytest -q
 - [开发计划与自研范围](DEVELOPMENT_PLAN.md)
 - [配置说明](docs/configuration.md)
 - [MVP0 使用说明](docs/mvp0-usage.md)
+- [MVP1 提取说明](docs/mvp1-extraction.md)
 
 ## 许可证
 

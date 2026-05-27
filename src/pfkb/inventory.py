@@ -70,7 +70,11 @@ class Inventory:
                 output_path TEXT,
                 error TEXT,
                 embedding_allowed INTEGER NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                source_size_bytes INTEGER,
+                source_mtime REAL,
+                output_sha256 TEXT,
+                skip_reason TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_extractions_path ON extractions(path);
@@ -78,6 +82,7 @@ class Inventory:
             CREATE INDEX IF NOT EXISTS idx_extractions_parser ON extractions(parser);
             """
         )
+        self._ensure_extraction_columns()
         self.connection.execute(
             "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
             ("schema_version", str(SCHEMA_VERSION)),
@@ -204,8 +209,9 @@ class Inventory:
                     """
                     INSERT INTO extractions (
                         path, parser, status, output_path, error,
-                        embedding_allowed, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        embedding_allowed, created_at,
+                        source_size_bytes, source_mtime, output_sha256, skip_reason
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         result.path,
@@ -215,6 +221,10 @@ class Inventory:
                         result.error,
                         int(result.embedding_allowed),
                         result.created_at,
+                        result.source_size_bytes,
+                        result.source_mtime,
+                        result.output_sha256,
+                        result.skip_reason,
                     ),
                 )
                 count += 1
@@ -259,6 +269,49 @@ class Inventory:
         sql += " ORDER BY created_at DESC, id DESC LIMIT :limit"
         rows = self.connection.execute(sql, params).fetchall()
         return [_extract_row_to_dict(row) for row in rows]
+
+    def latest_extracts_by_path(self) -> dict[str, dict]:
+        rows = self.connection.execute(
+            """
+            SELECT e.*
+            FROM extractions e
+            JOIN (
+                SELECT path, MAX(id) AS max_id
+                FROM extractions
+                GROUP BY path
+            ) latest ON latest.max_id = e.id
+            """
+        ).fetchall()
+        return {str(row["path"]): _extract_row_to_dict(row) for row in rows}
+
+    def latest_success_by_path(self) -> dict[str, dict]:
+        rows = self.connection.execute(
+            """
+            SELECT e.*
+            FROM extractions e
+            JOIN (
+                SELECT path, MAX(id) AS max_id
+                FROM extractions
+                WHERE status = 'ok'
+                GROUP BY path
+            ) latest ON latest.max_id = e.id
+            """
+        ).fetchall()
+        return {str(row["path"]): _extract_row_to_dict(row) for row in rows}
+
+    def _ensure_extraction_columns(self) -> None:
+        rows = self.connection.execute("PRAGMA table_info(extractions)").fetchall()
+        columns = {str(row["name"]) for row in rows}
+        required = {
+            "source_size_bytes": "INTEGER",
+            "source_mtime": "REAL",
+            "output_sha256": "TEXT",
+            "skip_reason": "TEXT",
+        }
+        for name, definition in required.items():
+            if name not in columns:
+                self.connection.execute(f"ALTER TABLE extractions ADD COLUMN {name} {definition}")
+        self.connection.commit()
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:

@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from .inventory import Inventory
-from .parse import build_parse_jobs_from_records, extract_jobs, write_manifest
+from .parse import extract_jobs, plan_parse_jobs_from_records, write_manifest
 from .policy import PolicyEngine
 from .report import write_access_log, write_scan_plan
 from .roots import discover_candidate_roots
@@ -57,6 +57,8 @@ def build_parser() -> ArgumentParser:
     extract.add_argument("--out", default="data/extract", help="Extraction output directory")
     extract.add_argument("--limit", type=int, default=100, help="Maximum inventory records to inspect")
     extract.add_argument("--manifest", default=None, help="Manifest JSONL path")
+    extract.add_argument("--force", action="store_true", help="Re-extract even when source appears unchanged")
+    extract.add_argument("--retry-failed", action="store_true", help="Only retry records whose latest extraction failed or skipped")
     extract.set_defaults(func=cmd_extract)
 
     extracts = subparsers.add_parser("extracts", help="List extraction results stored in inventory")
@@ -196,15 +198,26 @@ def cmd_extract(args) -> int:
     manifest_path = Path(args.manifest) if args.manifest else output_dir / "extract-manifest.jsonl"
     with Inventory(inventory_path) as inventory:
         records = inventory.list_files(limit=args.limit, include_dirs=False)
-    jobs = build_parse_jobs_from_records(records)
-    results = extract_jobs(jobs, output_dir)
+        latest_success = inventory.latest_success_by_path()
+        latest = inventory.latest_extracts_by_path()
+    plan = plan_parse_jobs_from_records(
+        records,
+        latest_success_by_path=latest_success,
+        latest_by_path=latest,
+        force=args.force,
+        retry_failed=args.retry_failed,
+    )
+    extracted = extract_jobs(plan.jobs, output_dir)
+    results = [*plan.skipped, *extracted]
     write_manifest(results, manifest_path)
     with Inventory(inventory_path) as inventory:
         stored_count = inventory.add_extract_results(results)
     counts: dict[str, int] = {}
     for result in results:
         counts[result.status] = counts.get(result.status, 0) + 1
-    print(f"jobs: {len(jobs)}")
+    print(f"jobs: {len(plan.jobs)}")
+    print(f"planned: {len(plan.jobs)}")
+    print(f"skipped: {len(plan.skipped)}")
     print(f"manifest: {manifest_path}")
     print(f"stored: {stored_count}")
     for status, count in sorted(counts.items()):
