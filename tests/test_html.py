@@ -96,6 +96,8 @@ def test_render_knowledge_browser_html_uses_chinese_ui_and_embedded_data():
     assert "需要复核" in html
     assert "摘要 / Summary" in html
     assert "基本信息 / Basic info" in html
+    assert 'docs: "项目文档 / Docs"' in html
+    assert 'document: "普通文档 / Document"' in html
     assert "隐私策略" in html
     assert "topic/privacy_policy" in html
 

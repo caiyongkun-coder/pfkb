@@ -898,8 +898,8 @@ _HTML_TEMPLATE = r"""<!doctype html>
       contentTypes: {
         code: "代码",
         config: "配置",
-        docs: "文档",
-        document: "文档",
+        docs: "项目文档 / Docs",
+        document: "普通文档 / Document",
         test: "测试",
         file: "文件",
         unknown: "未知"
