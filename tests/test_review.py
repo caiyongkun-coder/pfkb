@@ -221,6 +221,8 @@ def test_review_cli_writes_human_review_outputs(tmp_path):
     html = review_html.read_text(encoding="utf-8")
     assert "AnyFile Wiki 人工复核" in html
     assert "导出批复 / Export" in html
+    assert "显示 JSONL / Show" in html
+    assert "手动保存 review-decisions.jsonl" in html
     assert "✓ 导出完成 / Exported" in html
     assert "review-decisions.jsonl" in html
 
@@ -252,6 +254,8 @@ def test_render_human_review_html_embeds_items_and_decision_controls(tmp_path):
     assert "human-review.jsonl" in html
     assert "lastExportSignature" in html
     assert "exportDonePulse" in html
+    assert "showManualJsonl" in html
+    assert "manualJsonl" in html
     assert "Some file:// browser contexts block localStorage writes" in html
 
 

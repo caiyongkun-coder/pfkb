@@ -259,6 +259,52 @@ _HTML_TEMPLATE = r"""<!doctype html>
       background: var(--green);
     }
 
+    .manual-export {
+      margin: 0;
+      padding: 12px 20px;
+      background: #fffaf0;
+      border-bottom: 1px solid #f3d19e;
+    }
+
+    .manual-export[hidden] {
+      display: none;
+    }
+
+    .manual-export-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .manual-export-title {
+      margin: 0;
+      color: #7c2d12;
+      font-weight: 700;
+    }
+
+    .manual-export-help {
+      margin: 4px 0 0;
+      color: #7c2d12;
+      font-size: 12px;
+    }
+
+    .manual-export textarea {
+      display: block;
+      width: 100%;
+      min-height: 150px;
+      padding: 10px;
+      border: 1px solid #f3d19e;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      font-family: "Cascadia Mono", "Consolas", monospace;
+      font-size: 12px;
+      resize: vertical;
+      white-space: pre;
+    }
+
     @keyframes exportDonePulse {
       0% {
         transform: scale(1);
@@ -680,7 +726,19 @@ _HTML_TEMPLATE = r"""<!doctype html>
         <option value="decided">已批复 / Decided</option>
       </select>
       <button class="button" type="button" id="copyJsonl">复制 JSONL / Copy</button>
+      <button class="button" type="button" id="showJsonl">显示 JSONL / Show</button>
       <button class="button primary" type="button" id="exportJsonl">导出批复 / Export</button>
+    </section>
+
+    <section class="manual-export" id="manualExport" hidden aria-label="手动导出 JSONL / Manual JSONL export">
+      <div class="manual-export-row">
+        <div>
+          <p class="manual-export-title" id="manualExportTitle">手动保存 review-decisions.jsonl / Manual save</p>
+          <p class="manual-export-help" id="manualExportHelp"></p>
+        </div>
+        <button class="button" type="button" id="selectJsonl">选中文本 / Select all</button>
+      </div>
+      <textarea id="manualJsonl" readonly spellcheck="false" aria-label="review-decisions.jsonl 内容 / review-decisions.jsonl content"></textarea>
     </section>
 
     <main class="main">
@@ -754,7 +812,9 @@ _HTML_TEMPLATE = r"""<!doctype html>
       pageSize: 10,
       selectedId: (REVIEW_DATA.items || [])[0]?.id || "",
       decisions: loadStoredDecisions(),
-      lastExportSignature: ""
+      lastExportSignature: "",
+      manualExportVisible: false,
+      manualExportMessage: ""
     };
 
     function escapeHtml(value) {
@@ -796,6 +856,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
       state.lastExportSignature = "";
       saveStoredDecisions();
       renderExportButton();
+      renderManualExport();
       if (shouldRender) render();
     }
 
@@ -900,6 +961,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
       document.getElementById("prevPage").disabled = state.page <= 1;
       document.getElementById("nextPage").disabled = state.page >= pageCount;
       renderExportButton();
+      renderManualExport();
     }
 
     function renderFacets() {
@@ -1096,6 +1158,33 @@ _HTML_TEMPLATE = r"""<!doctype html>
       button.setAttribute("aria-label", isDone ? "导出完成 / Exported" : "导出批复 / Export");
     }
 
+    function renderManualExport() {
+      const panel = document.getElementById("manualExport");
+      const textarea = document.getElementById("manualJsonl");
+      const help = document.getElementById("manualExportHelp");
+      if (!panel || !textarea || !help) return;
+      panel.hidden = !state.manualExportVisible;
+      if (!state.manualExportVisible) return;
+      textarea.value = decisionsJsonl();
+      help.textContent = state.manualExportMessage || "如果浏览器拦截下载或剪贴板，请在这里全选复制，然后保存为 review-decisions.jsonl。 / If download or clipboard is blocked, select all here and save as review-decisions.jsonl.";
+    }
+
+    function showManualJsonl(message) {
+      const jsonl = decisionsJsonl();
+      if (!jsonl) {
+        window.alert("还没有批复项 / No decisions yet");
+        return;
+      }
+      state.manualExportVisible = true;
+      state.manualExportMessage = message || "";
+      renderManualExport();
+      const textarea = document.getElementById("manualJsonl");
+      if (textarea) {
+        textarea.focus();
+        textarea.select();
+      }
+    }
+
     function exportJsonl() {
       const jsonl = decisionsJsonl();
       if (!jsonl) {
@@ -1113,6 +1202,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
       URL.revokeObjectURL(url);
       state.lastExportSignature = decisionSignature();
       renderExportButton();
+      showManualJsonl("已尝试触发下载。如果没有看到文件，请从下方文本框复制内容并保存为 review-decisions.jsonl。 / Download was requested. If no file appears, copy the text below and save it as review-decisions.jsonl.");
     }
 
     async function copyJsonl() {
@@ -1126,6 +1216,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
         document.getElementById("copyJsonl").textContent = "已复制 / Copied";
       } catch (_error) {
         document.getElementById("copyJsonl").textContent = "复制失败 / Failed";
+        showManualJsonl("剪贴板被浏览器拦截。请从下方文本框手动复制内容。 / Clipboard was blocked. Copy the text below manually.");
       }
       window.setTimeout(() => {
         document.getElementById("copyJsonl").textContent = "复制 JSONL / Copy";
@@ -1162,6 +1253,15 @@ _HTML_TEMPLATE = r"""<!doctype html>
     });
     document.getElementById("exportJsonl").addEventListener("click", exportJsonl);
     document.getElementById("copyJsonl").addEventListener("click", copyJsonl);
+    document.getElementById("showJsonl").addEventListener("click", () => {
+      showManualJsonl("请从下方文本框复制内容，并保存为 review-decisions.jsonl。 / Copy the text below and save it as review-decisions.jsonl.");
+    });
+    document.getElementById("selectJsonl").addEventListener("click", () => {
+      const textarea = document.getElementById("manualJsonl");
+      if (!textarea) return;
+      textarea.focus();
+      textarea.select();
+    });
 
     populateSelects();
     render();
