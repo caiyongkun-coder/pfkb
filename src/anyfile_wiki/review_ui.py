@@ -12,26 +12,44 @@ def write_human_review_html(
     output_dir: str | Path,
     *,
     source_path: str | Path | None = None,
+    server_mode: bool = False,
+    submit_url: str = "/api/decisions",
 ) -> Path:
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
     html_path = root / "human-review.html"
     html_path.write_text(
-        render_human_review_html(items, source_path=source_path),
+        render_human_review_html(items, source_path=source_path, server_mode=server_mode, submit_url=submit_url),
         encoding="utf-8",
     )
     return html_path
 
 
-def render_human_review_html(items: Iterable[Any], *, source_path: str | Path | None = None) -> str:
+def render_human_review_html(
+    items: Iterable[Any],
+    *,
+    source_path: str | Path | None = None,
+    server_mode: bool = False,
+    submit_url: str = "/api/decisions",
+) -> str:
     normalized = [_normalize_item(item) for item in items]
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_path": str(source_path or ""),
         "items": normalized,
+        "server_mode": bool(server_mode),
+        "submit_url": submit_url,
     }
     data_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    return _HTML_TEMPLATE.replace("__ANYFILE_WIKI_REVIEW_DATA__", data_json)
+    mode_class = "mode-server" if server_mode else "mode-static"
+    controls = _server_controls() if server_mode else _static_controls()
+    manual_export = "" if server_mode else _manual_export_panel()
+    return (
+        _HTML_TEMPLATE.replace("__ANYFILE_WIKI_REVIEW_DATA__", data_json)
+        .replace("__ANYFILE_WIKI_REVIEW_MODE__", mode_class)
+        .replace("__ANYFILE_WIKI_REVIEW_CONTROLS__", controls)
+        .replace("__ANYFILE_WIKI_MANUAL_EXPORT__", manual_export)
+    )
 
 
 def _normalize_item(item: Any) -> dict[str, Any]:
@@ -75,6 +93,33 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _static_controls() -> str:
+    return """
+      <button class=\"button\" type=\"button\" id=\"copyJsonl\">复制 JSONL / Copy</button>
+      <button class=\"button\" type=\"button\" id=\"showJsonl\">显示 JSONL / Show</button>
+      <button class=\"button primary\" type=\"button\" id=\"exportJsonl\">导出批复 / Export</button>"""
+
+
+def _server_controls() -> str:
+    return """
+      <button class=\"button\" type=\"button\" id=\"saveDraft\">保存草稿 / Save</button>
+      <button class=\"button primary\" type=\"button\" id=\"submitReview\">提交批复 / Submit</button>"""
+
+
+def _manual_export_panel() -> str:
+    return """
+    <section class=\"manual-export\" id=\"manualExport\" hidden aria-label=\"手动导出 JSONL / Manual JSONL export\">
+      <div class=\"manual-export-row\">
+        <div>
+          <p class=\"manual-export-title\" id=\"manualExportTitle\">手动保存 review-decisions.jsonl / Manual save</p>
+          <p class=\"manual-export-help\" id=\"manualExportHelp\"></p>
+        </div>
+        <button class=\"button\" type=\"button\" id=\"selectJsonl\">选中文本 / Select all</button>
+      </div>
+      <textarea id=\"manualJsonl\" readonly spellcheck=\"false\" aria-label=\"review-decisions.jsonl 内容 / review-decisions.jsonl content\"></textarea>
+    </section>"""
 
 
 _HTML_TEMPLATE = r"""<!doctype html>
@@ -702,7 +747,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
     }
   </style>
 </head>
-<body>
+<body class="__ANYFILE_WIKI_REVIEW_MODE__">
   <div class="app">
     <header class="topbar">
       <div class="brand">
@@ -725,21 +770,10 @@ _HTML_TEMPLATE = r"""<!doctype html>
         <option value="undecided">未批复 / Undecided</option>
         <option value="decided">已批复 / Decided</option>
       </select>
-      <button class="button" type="button" id="copyJsonl">复制 JSONL / Copy</button>
-      <button class="button" type="button" id="showJsonl">显示 JSONL / Show</button>
-      <button class="button primary" type="button" id="exportJsonl">导出批复 / Export</button>
+__ANYFILE_WIKI_REVIEW_CONTROLS__
     </section>
 
-    <section class="manual-export" id="manualExport" hidden aria-label="手动导出 JSONL / Manual JSONL export">
-      <div class="manual-export-row">
-        <div>
-          <p class="manual-export-title" id="manualExportTitle">手动保存 review-decisions.jsonl / Manual save</p>
-          <p class="manual-export-help" id="manualExportHelp"></p>
-        </div>
-        <button class="button" type="button" id="selectJsonl">选中文本 / Select all</button>
-      </div>
-      <textarea id="manualJsonl" readonly spellcheck="false" aria-label="review-decisions.jsonl 内容 / review-decisions.jsonl content"></textarea>
-    </section>
+__ANYFILE_WIKI_MANUAL_EXPORT__
 
     <main class="main">
       <aside class="sidebar">
@@ -1158,6 +1192,14 @@ _HTML_TEMPLATE = r"""<!doctype html>
       button.setAttribute("aria-label", isDone ? "导出完成 / Exported" : "导出批复 / Export");
     }
 
+    function renderServerButtons(message = "") {
+      if (!REVIEW_DATA.server_mode) return;
+      const draftButton = document.getElementById("saveDraft");
+      const submitButton = document.getElementById("submitReview");
+      if (draftButton) draftButton.textContent = message || "保存草稿 / Save";
+      if (submitButton && !message) submitButton.textContent = "提交批复 / Submit";
+    }
+
     function renderManualExport() {
       const panel = document.getElementById("manualExport");
       const textarea = document.getElementById("manualJsonl");
@@ -1223,6 +1265,38 @@ _HTML_TEMPLATE = r"""<!doctype html>
       }, 1000);
     }
 
+    async function submitToServer(finalize) {
+      const records = decisionRecords();
+      if (!records.length) {
+        window.alert("还没有批复项 / No decisions yet");
+        return;
+      }
+      const target = REVIEW_DATA.submit_url || "/api/decisions";
+      const activeButton = document.getElementById(finalize ? "submitReview" : "saveDraft");
+      if (activeButton) activeButton.textContent = finalize ? "提交中 / Submitting..." : "保存中 / Saving...";
+      try {
+        const response = await fetch(target, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ final: Boolean(finalize), records })
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || `HTTP ${response.status}`);
+        }
+        state.lastExportSignature = decisionSignature();
+        renderExportButton();
+        if (activeButton) activeButton.textContent = finalize ? "已提交 / Submitted" : "已保存 / Saved";
+        if (finalize) {
+          window.alert("批复已提交，本地流程可以继续。 / Review submitted. The local workflow can continue.");
+        }
+      } catch (error) {
+        if (activeButton) activeButton.textContent = finalize ? "提交失败 / Failed" : "保存失败 / Failed";
+        window.alert(`提交失败 / Submit failed: ${error.message || error}`);
+      }
+      window.setTimeout(() => renderServerButtons(), 1400);
+    }
+
     document.getElementById("searchInput").addEventListener("input", (event) => {
       state.query = event.target.value;
       state.page = 1;
@@ -1251,17 +1325,19 @@ _HTML_TEMPLATE = r"""<!doctype html>
       state.page += 1;
       render();
     });
-    document.getElementById("exportJsonl").addEventListener("click", exportJsonl);
-    document.getElementById("copyJsonl").addEventListener("click", copyJsonl);
-    document.getElementById("showJsonl").addEventListener("click", () => {
+    document.getElementById("exportJsonl")?.addEventListener("click", exportJsonl);
+    document.getElementById("copyJsonl")?.addEventListener("click", copyJsonl);
+    document.getElementById("showJsonl")?.addEventListener("click", () => {
       showManualJsonl("请从下方文本框复制内容，并保存为 review-decisions.jsonl。 / Copy the text below and save it as review-decisions.jsonl.");
     });
-    document.getElementById("selectJsonl").addEventListener("click", () => {
+    document.getElementById("selectJsonl")?.addEventListener("click", () => {
       const textarea = document.getElementById("manualJsonl");
       if (!textarea) return;
       textarea.focus();
       textarea.select();
     });
+    document.getElementById("saveDraft")?.addEventListener("click", () => submitToServer(false));
+    document.getElementById("submitReview")?.addEventListener("click", () => submitToServer(true));
 
     populateSelects();
     render();

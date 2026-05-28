@@ -119,6 +119,14 @@ anyfile-wiki html --analysis data/first-analyze/knowledge-index.jsonl --out data
 
 `human-review.html` 是静态单文件页面。它不会直接执行本地命令，也不会绕过隐私策略；用户点击“导出批复”后，浏览器下载 `review-decisions.jsonl`，再由 agent 读取。
 
+更顺手的主流程是由 agent 启动本地批复服务：
+
+```powershell
+anyfile-wiki review-server --review-dir data/first-review --once
+```
+
+服务只监听本机地址，启动时会打印带 token 的 `review_url`。服务版页面不显示 JSONL 下载/复制按钮，只保留“保存草稿”和“提交批复”；提交后由本地 server 直接写入 `review-decisions.jsonl`、`decisions-summary.md`、`next-actions.jsonl` 和 `decision-plan.md`。
+
 读取批复结果：
 
 ```powershell

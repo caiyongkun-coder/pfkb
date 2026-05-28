@@ -37,6 +37,7 @@ AnyFile Wiki is meant to be a knowledge governance layer over the local filesyst
 - Real LLM/API analysis only receives privacy-gated extracted text; cloud mode also requires explicit allowed paths and risk acknowledgement.
 - `anyfile-wiki llm` for explaining local/cloud model policy and cloud-read boundaries.
 - `anyfile-wiki review` for Markdown, JSONL, and `human-review.html` review outputs covering unreadable, unsupported, low-confidence, or cloud-unauthorized files.
+- `anyfile-wiki review-server` for a local `127.0.0.1` review service where the page submits decisions directly to local files.
 - `anyfile-wiki decisions` for reading `review-decisions.jsonl` exported from the HTML review page, then writing a summary, `next-actions.jsonl`, and `decision-plan.md`.
 - `anyfile-wiki html` for turning `knowledge-index.jsonl` into a local Chinese/English asset browser with a tag tree, pagination, filters, search, and file details.
 - Direct text extraction is supported; MarkItDown is an optional parser dependency.
@@ -140,6 +141,9 @@ anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/fir
 
 # Write the human review list
 anyfile-wiki review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
+
+# Start the local review service. Submitting the page writes review-decisions.jsonl and follow-up plans
+anyfile-wiki review-server --review-dir data/first-review --once
 
 # Resumable daily run: pass roots on the first run, then repeat without roots to continue
 anyfile-wiki run "$env:USERPROFILE\Documents" --privacy configs/privacy.yaml --out data/daily-run --max-scan-entries 500 --extract-limit 100 --analyze-limit 100

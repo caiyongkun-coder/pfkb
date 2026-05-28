@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import contextlib
+import http.client
 import io
 import json
 from pathlib import Path
+import threading
 
 from anyfile_wiki.cli import main as cli_main
 from anyfile_wiki.inventory import Inventory
@@ -11,6 +13,7 @@ from anyfile_wiki.llm_config import cloud_allowed_for_path, describe_llm_config,
 from anyfile_wiki.parse import ExtractResult
 from anyfile_wiki.policy import AccessDecision
 from anyfile_wiki.review import build_review_items
+from anyfile_wiki.review_server import make_review_server
 from anyfile_wiki.review_ui import render_human_review_html
 from anyfile_wiki.scan import ScanEntry
 
@@ -257,6 +260,94 @@ def test_render_human_review_html_embeds_items_and_decision_controls(tmp_path):
     assert "showManualJsonl" in html
     assert "manualJsonl" in html
     assert "Some file:// browser contexts block localStorage writes" in html
+
+
+def test_render_human_review_html_server_mode_uses_submit_controls(tmp_path):
+    item = build_review_items(
+        [
+            {
+                "path": str(tmp_path / "allowed.md"),
+                "extension": ".md",
+                "is_dir": False,
+                "access_policy": "allow",
+                "policy_source": "test",
+                "policy_reason": "fixture",
+                "is_read_allowed": True,
+                "is_extract_allowed": True,
+            }
+        ],
+        {},
+    )[0]
+
+    html = render_human_review_html([item], source_path="human-review.jsonl", server_mode=True, submit_url="/api/decisions?token=t")
+
+    assert "保存草稿 / Save" in html
+    assert "提交批复 / Submit" in html
+    assert 'id="copyJsonl"' not in html
+    assert 'id="showJsonl"' not in html
+    assert 'id="exportJsonl"' not in html
+    assert 'id="manualJsonl"' not in html
+    assert "/api/decisions?token=t" in html
+
+
+def test_review_server_submits_decisions_and_writes_action_outputs(tmp_path):
+    review_dir = tmp_path / "review"
+    review_dir.mkdir()
+    source = tmp_path / "allowed.md"
+    review_record = {
+        "path": str(source),
+        "category": "rules_only_or_low_confidence",
+        "reason": "fixture",
+        "action": "review",
+        "severity": "medium",
+    }
+    (review_dir / "human-review.jsonl").write_text(json.dumps(review_record, ensure_ascii=False) + "\n", encoding="utf-8")
+    httpd, token = make_review_server(review_dir=review_dir, port=0, token="test-token", once=True)
+    host, port = httpd.server_address[:2]
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        connection = http.client.HTTPConnection(host, port, timeout=5)
+        connection.request("GET", f"/review?token={token}")
+        response = connection.getresponse()
+        html = response.read().decode("utf-8")
+        assert response.status == 200
+        assert "提交批复 / Submit" in html
+        assert 'id="copyJsonl"' not in html
+
+        payload = {
+            "final": True,
+            "records": [
+                {
+                    "path": str(source),
+                    "category": "rules_only_or_low_confidence",
+                    "severity": "medium",
+                    "decision": "allow_local_llm",
+                    "manual_tags": ["topic/test"],
+                    "note": "server submit",
+                }
+            ],
+        }
+        connection.request(
+            "POST",
+            f"/api/decisions?token={token}",
+            body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        result = json.loads(response.read().decode("utf-8"))
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+    assert result["ok"] is True
+    assert (review_dir / "review-decisions.jsonl").exists()
+    assert (review_dir / "decisions-summary.md").exists()
+    assert (review_dir / "next-actions.jsonl").exists()
+    assert (review_dir / "decision-plan.md").exists()
+    assert "queue_local_llm_review" in (review_dir / "next-actions.jsonl").read_text(encoding="utf-8")
 
 
 def test_decisions_cli_reads_exported_jsonl_and_writes_summary(tmp_path):

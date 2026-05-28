@@ -24,6 +24,7 @@
 - 已能生成给人看的 `knowledge-index.md`、`tag-index.md`。
 - 已能生成 `knowledge-index.html` 资产浏览页，支持中英双语、标签树、搜索、筛选、分页和详情面板。
 - 已能生成 `human-review.html` 人工复核批复页。
+- 新增 `anyfile-wiki review-server`，可启动本地批复服务，让页面直接提交并写入本地批复结果。
 - 人工复核页支持确认当前结果、允许本地 LLM、允许云端 LLM、已人工整理、忽略、稍后处理、保持隐私。
 - 人工复核页可导出 `review-decisions.jsonl`。
 - `anyfile-wiki decisions` 可读取 `review-decisions.jsonl`，生成批复摘要、`next-actions.jsonl` 和 `decision-plan.md`。
@@ -34,10 +35,11 @@
 - `file://` 静态打开时，批复按钮已能即时响应。
 - 导出批复后，按钮会动画变成 `✓ 导出完成 / Exported`；后续再修改批复会恢复为待导出状态。
 - 当浏览器拦截下载或剪贴板时，人工复核页可直接显示 JSONL 文本，方便手动复制保存。
+- 服务版批复页面隐藏 JSONL 复制、显示和导出按钮，只保留保存草稿和提交批复。
 
 ## 最新验证
 
-- `python -m pytest -q`：`76 passed`
+- `python -m pytest -q`：`78 passed`
 - `anyfile-wiki --help` 已包含 `decisions` 命令。
 - `anyfile-wiki run --help` 已包含 `run-state.json` 日常运行入口。
 - 演示页已生成：
