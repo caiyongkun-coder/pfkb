@@ -29,10 +29,10 @@ from .decisions import (
 from .html import load_browser_records, write_knowledge_browser_html
 from .inventory import Inventory
 from .llm_config import describe_llm_config, load_llm_config
-from .parse import extract_jobs, plan_parse_jobs_from_records, write_manifest
+from .parse import extract_job, extract_jobs, plan_parse_jobs_from_records, write_manifest
 from .policy import PolicyEngine, describe_privacy_policy, load_policy
 from .report import write_access_log, write_scan_plan
-from .review import build_review_items, load_analysis_manifest, review_stats, write_review_outputs
+from .review import build_review_items, load_analysis_manifest, review_reason_stats, review_stats, write_review_outputs
 from .review_server import make_review_server
 from .roots import describe_roots_config, discover_candidate_roots, load_roots_config
 from .run_state import (
@@ -108,9 +108,26 @@ def build_parser() -> ArgumentParser:
     extract.add_argument("--inventory", default="data/inventory.sqlite", help="SQLite inventory path")
     extract.add_argument("--out", default="data/extract", help="Extraction output directory")
     extract.add_argument("--limit", type=int, default=100, help="Maximum inventory records to inspect")
+    extract.add_argument(
+        "--extensions",
+        default="",
+        help="Comma-separated extension filter such as .txt,.xlsx,.jpg; empty means all supported extensions",
+    )
+    extract.add_argument(
+        "--max-source-mb",
+        type=float,
+        default=None,
+        help="Only plan files at or below this source size in MB; useful for staged retries",
+    )
     extract.add_argument("--manifest", default=None, help="Manifest JSONL path")
     extract.add_argument("--force", action="store_true", help="Re-extract even when source appears unchanged")
     extract.add_argument("--retry-failed", action="store_true", help="Only retry records whose latest extraction failed or skipped")
+    extract.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=0,
+        help="Maximum seconds allowed for each external parser job; use 0 to disable",
+    )
     extract.set_defaults(func=cmd_extract)
 
     extracts = subparsers.add_parser("extracts", help="List extraction results stored in inventory")
@@ -195,6 +212,12 @@ def build_parser() -> ArgumentParser:
     run.add_argument("--inventory", default=None, help="SQLite inventory path")
     run.add_argument("--max-scan-entries", type=int, default=500, help="Maximum scan entries for this run step")
     run.add_argument("--extract-limit", type=int, default=100, help="Maximum inventory records to inspect in this run step")
+    run.add_argument(
+        "--extract-timeout-seconds",
+        type=int,
+        default=0,
+        help="Maximum seconds allowed for each external parser job during run extract stage; use 0 to disable",
+    )
     run.add_argument("--analyze-limit", type=int, default=100, help="Maximum extracted records to analyze in this run step")
     run.add_argument("--review-limit", type=int, default=1000, help="Maximum inventory files to inspect when writing review outputs")
     run.add_argument(
@@ -383,6 +406,7 @@ def cmd_extract(args) -> int:
         records = inventory.list_files(limit=args.limit, include_dirs=False)
         latest_success = inventory.latest_success_by_path()
         latest = inventory.latest_extracts_by_path()
+    records = _filter_extract_records(records, extensions=args.extensions, max_source_mb=args.max_source_mb)
     plan = plan_parse_jobs_from_records(
         records,
         latest_success_by_path=latest_success,
@@ -390,14 +414,23 @@ def cmd_extract(args) -> int:
         force=args.force,
         retry_failed=args.retry_failed,
     )
-    extracted = extract_jobs(plan.jobs, output_dir)
-    results = [*plan.skipped, *extracted]
-    write_manifest(results, manifest_path)
-    with Inventory(inventory_path) as inventory:
-        stored_count = inventory.add_extract_results(results)
+    timeout_seconds = args.timeout_seconds if args.timeout_seconds and args.timeout_seconds > 0 else None
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
     counts: dict[str, int] = {}
-    for result in results:
-        counts[result.status] = counts.get(result.status, 0) + 1
+    stored_count = 0
+    error_count = 0
+    with Inventory(inventory_path) as inventory, manifest_path.open("w", encoding="utf-8") as manifest:
+        for result in plan.skipped:
+            _write_manifest_result(manifest, result)
+            stored_count += inventory.add_extract_results([result])
+            counts[result.status] = counts.get(result.status, 0) + 1
+        for job in plan.jobs:
+            result = extract_job(job, output_dir, timeout_seconds=timeout_seconds)
+            _write_manifest_result(manifest, result)
+            stored_count += inventory.add_extract_results([result])
+            counts[result.status] = counts.get(result.status, 0) + 1
+            if result.status == "error":
+                error_count += 1
     print(f"jobs: {len(plan.jobs)}")
     print(f"planned: {len(plan.jobs)}")
     print(f"skipped: {len(plan.skipped)}")
@@ -405,7 +438,32 @@ def cmd_extract(args) -> int:
     print(f"stored: {stored_count}")
     for status, count in sorted(counts.items()):
         print(f"{status}: {count}")
-    return 0 if not any(result.status == "error" for result in results) else 1
+    return 0 if error_count == 0 else 1
+
+
+def _write_manifest_result(handle, result) -> None:
+    handle.write(json.dumps(asdict(result), ensure_ascii=False, sort_keys=True) + "\n")
+    handle.flush()
+
+
+def _filter_extract_records(records: list[dict], *, extensions: str = "", max_source_mb: float | None = None) -> list[dict]:
+    wanted_extensions = {
+        item if item.startswith(".") else f".{item}"
+        for item in (part.strip().lower() for part in str(extensions or "").split(","))
+        if item and item != "."
+    }
+    max_bytes = int(max_source_mb * 1024 * 1024) if max_source_mb is not None else None
+    filtered: list[dict] = []
+    for record in records:
+        extension = str(record.get("extension") or "").lower()
+        if wanted_extensions and extension not in wanted_extensions:
+            continue
+        if max_bytes is not None:
+            size = record.get("size_bytes")
+            if size is not None and int(size) > max_bytes:
+                continue
+        filtered.append(record)
+    return filtered
 
 
 def cmd_extracts(args) -> int:
@@ -507,6 +565,7 @@ def cmd_review(args) -> int:
     )
     outputs = write_review_outputs(items, args.out)
     stats = review_stats(items)
+    reason_stats = review_reason_stats(items)
     if args.json:
         print(json.dumps([item.__dict__ for item in items], ensure_ascii=False, indent=2))
         return 0
@@ -516,6 +575,10 @@ def cmd_review(args) -> int:
         print(f"{name}: {path}")
     for category, count in sorted(stats.items()):
         print(f"{category}: {count}")
+    if reason_stats:
+        print("reason_codes:")
+        for reason_code, count in sorted(reason_stats.items()):
+            print(f"- {reason_code}: {count}")
     return 0
 
 
@@ -790,14 +853,29 @@ def _run_extract_stage(state: dict, args) -> dict:
             latest_success_by_path=latest_success,
             latest_by_path=latest,
         )
-        extracted = extract_jobs(plan.jobs, extract_dir)
-        results = [*plan.skipped, *extracted]
-        write_manifest(results, chunk_manifest)
-        _append_jsonl_records([asdict(result) for result in results], aggregate_manifest)
-        stored_count = inventory.add_extract_results(results)
+        timeout_seconds = (
+            args.extract_timeout_seconds if args.extract_timeout_seconds and args.extract_timeout_seconds > 0 else None
+        )
+        extracted_count = 0
+        stored_count = 0
+        counts: Counter[str] = Counter()
+        with chunk_manifest.open("w", encoding="utf-8") as chunk_handle, aggregate_manifest.open(
+            "a", encoding="utf-8"
+        ) as aggregate_handle:
+            for result in plan.skipped:
+                _write_manifest_result(chunk_handle, result)
+                _write_manifest_result(aggregate_handle, result)
+                stored_count += inventory.add_extract_results([result])
+                counts[result.status] += 1
+            for job in plan.jobs:
+                result = extract_job(job, extract_dir, timeout_seconds=timeout_seconds)
+                extracted_count += 1
+                _write_manifest_result(chunk_handle, result)
+                _write_manifest_result(aggregate_handle, result)
+                stored_count += inventory.add_extract_results([result])
+                counts[result.status] += 1
     cursor_path = str(records[-1]["path"]) if records else stage_state.get("cursor_path")
     status = "paused" if len(records) >= limit else "complete"
-    counts = Counter(result.status for result in results)
     stats = {
         "records_inspected": len(records),
         "jobs": len(plan.jobs),
@@ -809,7 +887,7 @@ def _run_extract_stage(state: dict, args) -> dict:
         "chunk_manifest": str(chunk_manifest),
         "extract_manifest": str(aggregate_manifest),
     }
-    message = f"inspected {len(records)} inventory records; extracted {len(extracted)}"
+    message = f"inspected {len(records)} inventory records; extracted {extracted_count}"
     mark_stage_result(
         state,
         "extract",
@@ -1135,6 +1213,17 @@ def _format_llm_summary(summary: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _configure_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args))
+
+
+def _configure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass

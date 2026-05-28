@@ -41,7 +41,7 @@ AnyFile Wiki is meant to be a knowledge governance layer over the local filesyst
 - `anyfile-wiki decisions` for reading `review-decisions.jsonl` exported from the HTML review page, then writing a summary, `next-actions.jsonl`, and `decision-plan.md`.
 - `anyfile-wiki assets` for applying human review actions back into the final `asset-index.jsonl` and refreshing the human HTML browser.
 - `anyfile-wiki html` for turning `knowledge-index.jsonl` into a local Chinese/English asset browser with a tag tree, pagination, filters, search, and file details.
-- Direct text extraction is supported; MarkItDown is an optional parser dependency.
+- Direct text extraction and lightweight Excel summaries are supported; MarkItDown and RapidOCR are optional parser dependencies.
 
 ## Quick Start
 
@@ -49,6 +49,8 @@ The recommended contributor setup is an editable install. This makes the `anyfil
 
 ```powershell
 python -m pip install -e .[dev]
+python -m pip install -e .[parse]  # Office/PDF document parsing
+python -m pip install -e .[ocr]    # Image OCR
 
 if (-not (Test-Path configs/privacy.yaml)) {
     Copy-Item configs/privacy.example.yaml configs/privacy.yaml

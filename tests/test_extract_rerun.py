@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 from pathlib import Path
+import sys
 
 from anyfile_wiki.cli import main as cli_main
 from anyfile_wiki.inventory import Inventory
@@ -89,7 +90,40 @@ def test_extract_reprocesses_changed_sources_and_force_overrides_skip(tmp_path):
     assert "ok: 1" in stdout
 
 
-def test_retry_failed_only_plans_latest_failed_or_skipped_records(tmp_path):
+def test_extract_filters_by_extension_and_max_source_size(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+    small = root / "small.txt"
+    large = root / "large.md"
+    ignored = root / "ignored.log"
+    small.write_text("small", encoding="utf-8")
+    large.write_text("x" * 2048, encoding="utf-8")
+    ignored.write_text("ignored", encoding="utf-8")
+    inventory_path = tmp_path / "inventory.sqlite"
+    _scan(root, inventory_path)
+
+    out_dir = tmp_path / "extract-filtered"
+    code, stdout, stderr = _run_cli(
+        [
+            "extract",
+            "--inventory",
+            str(inventory_path),
+            "--out",
+            str(out_dir),
+            "--extensions",
+            ".txt,.md",
+            "--max-source-mb",
+            "0.001",
+        ]
+    )
+
+    assert code == 0, stderr
+    assert "planned: 1" in stdout
+    manifest = _manifest_records(out_dir / "extract-manifest.jsonl")
+    assert [Path(record["path"]).name for record in manifest] == ["small.txt"]
+
+
+def test_retry_failed_only_plans_latest_failed_or_skipped_records(tmp_path, monkeypatch):
     root = tmp_path / "root"
     root.mkdir()
     note = root / "note.md"
@@ -98,6 +132,7 @@ def test_retry_failed_only_plans_latest_failed_or_skipped_records(tmp_path):
     pdf.write_text("fake pdf", encoding="utf-8")
     inventory_path = tmp_path / "inventory.sqlite"
     _scan(root, inventory_path)
+    monkeypatch.setitem(sys.modules, "markitdown", None)
 
     code, stdout, stderr = _run_cli(["extract", "--inventory", str(inventory_path), "--out", str(tmp_path / "extract1")])
     assert code == 0, stderr

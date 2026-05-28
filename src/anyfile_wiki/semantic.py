@@ -20,6 +20,48 @@ class SemanticUnderstanding:
 
 TOPICS = [
     (
+        "topic/business_budgeting",
+        "预算/测算",
+        ("预算", "测算", "估算", "投资", "成本率", "成本", "ftp", "定价", "预测", "计划值"),
+        "记录预算测算、成本估算、FTP 定价或经营计划相关材料。",
+    ),
+    (
+        "topic/financial_data",
+        "金融/财务数据",
+        ("贷款", "存款", "利息", "利率", "汇率", "科目", "余额", "收益", "市场数据", "日均", "期限", "资金"),
+        "整理贷款、存款、利息、利率、科目、余额和市场数据等金融或财务信息。",
+    ),
+    (
+        "topic/data_reconciliation",
+        "数据核对/问题清单",
+        ("核对", "问题", "反馈", "清单", "明细", "汇总", "差异", "校验", "口径", "取数"),
+        "记录数据核对、问题反馈、明细清单、汇总表和取数口径。",
+    ),
+    (
+        "topic/contract_agreement",
+        "合同/协议",
+        ("合同", "协议", "借款", "租赁", "采购", "招标", "投标", "中标", "担保", "条款"),
+        "保存合同、协议、投标、采购、借款和租赁等法律或商务文件。",
+    ),
+    (
+        "topic/project_delivery",
+        "项目交付",
+        ("项目", "需求", "规格说明", "开发", "实施", "上线", "投产", "计划", "通讯录", "里程碑"),
+        "描述项目需求、开发实施、投产计划、项目沟通和交付过程。",
+    ),
+    (
+        "topic/reporting_material",
+        "汇报/培训材料",
+        ("汇报", "会议", "培训", "材料", "大纲", "演示", "ppt", "说明书", "方案"),
+        "用于会议汇报、培训演示、说明书和方案材料。",
+    ),
+    (
+        "topic/template_form",
+        "模板/表样",
+        ("模板", "表样", "表单", "样表", "模版", "附件", "格式"),
+        "作为模板、表样、表单或附件格式复用。",
+    ),
+    (
         "topic/privacy_policy",
         "隐私策略",
         ("privacy", "隐私", "deny", "metadata_only", "no_embedding", "access_policy"),
@@ -143,9 +185,9 @@ def infer_semantic_understanding(
         summary=summary,
         tags=tags[:12],
         confidence=confidence,
-        needs_human_review=confidence < 0.7,
+        needs_human_review=confidence < 0.62,
         review_reason=(
-            "codex_mock_low_signal" if confidence < 0.7 else "codex_mock_semantic_reviewed"
+            "codex_mock_low_signal" if confidence < 0.62 else "codex_mock_semantic_reviewed"
         ),
         key_points=key_points[:5],
         model_notes=(
@@ -256,8 +298,8 @@ def _semantic_confidence(
     config_keys: list[str],
     rule_summary: str,
 ) -> float:
-    score = 0.45
-    score += min(len(topics), 4) * 0.08
+    score = 0.52
+    score += min(len(topics), 4) * 0.10
     if code_symbols:
         score += 0.08
     if headings:
@@ -265,7 +307,7 @@ def _semantic_confidence(
     if config_keys:
         score += 0.06
     if len(rule_summary) >= 80:
-        score += 0.04
+        score += 0.06
     return min(round(score, 2), 0.92)
 
 

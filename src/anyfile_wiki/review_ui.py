@@ -64,11 +64,13 @@ def _normalize_item(item: Any) -> dict[str, Any]:
         tags = [str(tags)]
     path = _text(record.get("path"))
     category = _text(record.get("category"))
+    reason_code = _text(record.get("reason_code"))
     return {
-        "id": f"{path}::{category}",
+        "id": f"{path}::{category}::{reason_code}",
         "path": path,
         "name": Path(path).name or path,
         "category": category,
+        "reason_code": reason_code,
         "reason": _text(record.get("reason")),
         "action": _text(record.get("action")),
         "severity": _text(record.get("severity") or "medium"),
@@ -911,6 +913,7 @@ __ANYFILE_WIKI_MANUAL_EXPORT__
         item.path,
         item.name,
         item.category,
+        item.reason_code,
         item.reason,
         item.action,
         item.access_policy,
@@ -1061,7 +1064,7 @@ __ANYFILE_WIKI_MANUAL_EXPORT__
               <span class="badge ${escapeHtml(item.severity)}">${escapeHtml(severityLabel(item.severity))}</span>
             </div>
             <div class="row-path">${escapeHtml(item.path)}</div>
-            <div class="row-reason">${escapeHtml(categoryLabel(item.category))} ${decisionBadge}</div>
+            <div class="row-reason">${escapeHtml(categoryLabel(item.category))} <code>${escapeHtml(item.reason_code || "")}</code> ${decisionBadge}</div>
           </button>
         </li>`;
       }).join("");
@@ -1116,6 +1119,7 @@ __ANYFILE_WIKI_MANUAL_EXPORT__
           <h3>基础信息 / Basic info</h3>
           <dl class="kv">
             <dt>类别 / Category</dt><dd>${escapeHtml(categoryLabel(item.category))} <code>${escapeHtml(item.category)}</code></dd>
+            <dt>原因代码 / Reason code</dt><dd><code>${escapeHtml(item.reason_code || "unknown")}</code></dd>
             <dt>优先级 / Priority</dt><dd>${escapeHtml(severityLabel(item.severity))} <code>${escapeHtml(item.severity)}</code></dd>
             <dt>隐私策略 / Policy</dt><dd><code>${escapeHtml(item.access_policy || "unknown")}</code></dd>
             <dt>提取状态 / Extract</dt><dd><code>${escapeHtml(item.extraction_status || "unknown")}</code></dd>
@@ -1156,6 +1160,7 @@ __ANYFILE_WIKI_MANUAL_EXPORT__
             decided_at: new Date().toISOString(),
             path: item.path,
             category: item.category,
+            reason_code: item.reason_code,
             severity: item.severity,
             decision: decision.decision,
             manual_tags: decision.manual_tags || [],

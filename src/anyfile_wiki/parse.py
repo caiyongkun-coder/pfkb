@@ -6,6 +6,8 @@ from pathlib import Path
 import hashlib
 import json
 import re
+import subprocess
+import sys
 
 from .scan import ScanEntry
 
@@ -35,7 +37,15 @@ TEXT_EXTENSIONS = {
     ".cpp",
     ".h",
     ".hpp",
+    ".ps1",
+    ".sh",
+    ".sql",
+    ".toml",
+    ".xml",
 }
+
+OCR_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}
 
 
 @dataclass(frozen=True)
@@ -154,23 +164,44 @@ def choose_parser(extension: str) -> str | None:
     normalized = extension.lower()
     if normalized in TEXT_EXTENSIONS:
         return "direct_text"
-    if normalized in {".pdf", ".docx", ".pptx", ".xlsx"}:
+    if normalized in SPREADSHEET_EXTENSIONS:
+        return "spreadsheet"
+    if normalized in {".pdf", ".docx", ".pptx"}:
         return "markitdown"
+    if normalized in OCR_IMAGE_EXTENSIONS:
+        return "ocr"
     return None
 
 
-def extract_jobs(jobs: list[ParseJob], output_dir: str | Path) -> list[ExtractResult]:
+def extract_jobs(
+    jobs: list[ParseJob],
+    output_dir: str | Path,
+    *,
+    timeout_seconds: int | None = None,
+) -> list[ExtractResult]:
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
-    results: list[ExtractResult] = []
-    for job in jobs:
-        if job.parser == "direct_text":
-            results.append(_extract_direct_text(job, root))
-        elif job.parser == "markitdown":
-            results.append(_extract_markitdown(job, root))
-        else:
-            results.append(_result(job, "skipped", None, f"unsupported parser: {job.parser}"))
-    return results
+    return [extract_job(job, root, timeout_seconds=timeout_seconds) for job in jobs]
+
+
+def extract_job(job: ParseJob, output_dir: str | Path, *, timeout_seconds: int | None = None) -> ExtractResult:
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    if job.parser == "direct_text":
+        return _extract_direct_text(job, root)
+    if job.parser == "markitdown":
+        if timeout_seconds and timeout_seconds > 0:
+            return _extract_with_timeout(job, root, timeout_seconds)
+        return _extract_markitdown(job, root)
+    if job.parser == "spreadsheet":
+        if timeout_seconds and timeout_seconds > 0:
+            return _extract_with_timeout(job, root, timeout_seconds)
+        return _extract_spreadsheet(job, root)
+    if job.parser == "ocr":
+        if timeout_seconds and timeout_seconds > 0:
+            return _extract_with_timeout(job, root, timeout_seconds)
+        return _extract_ocr(job, root)
+    return _result(job, "skipped", None, f"unsupported parser: {job.parser}")
 
 
 def write_manifest(results: list[ExtractResult], path: str | Path) -> None:
@@ -210,6 +241,209 @@ def _extract_markitdown(job: ParseJob, output_dir: Path) -> ExtractResult:
         return _result(job, "ok", output, None)
     except Exception as exc:  # noqa: BLE001 - manifest should capture parser failures.
         return _result(job, "error", None, str(exc))
+
+
+def _extract_spreadsheet(job: ParseJob, output_dir: Path) -> ExtractResult:
+    try:
+        if job.path.suffix.lower() == ".xlsx":
+            text = _extract_xlsx_preview(job.path)
+        else:
+            text = _extract_xls_preview(job.path)
+        output = output_dir / "spreadsheet" / _artifact_name(job.path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(text, encoding="utf-8")
+        return _result(job, "ok", output, None)
+    except ImportError as exc:
+        return _result(job, "skipped", None, f"spreadsheet parser unavailable: {exc}")
+    except Exception as exc:  # noqa: BLE001 - manifest should capture parser failures.
+        return _result(job, "error", None, str(exc))
+
+
+def _extract_ocr(job: ParseJob, output_dir: Path) -> ExtractResult:
+    try:
+        from rapidocr import RapidOCR  # type: ignore
+    except Exception as exc:  # noqa: BLE001 - optional dependency.
+        return _result(job, "skipped", None, f"rapidocr unavailable: {exc}")
+
+    try:
+        engine = RapidOCR()
+        recognized = engine(str(job.path))
+        lines = [str(item).strip() for item in (getattr(recognized, "txts", None) or []) if str(item).strip()]
+        scores = [float(item) for item in (getattr(recognized, "scores", None) or [])]
+        if not lines:
+            return _result(job, "skipped", None, "ocr produced no text")
+
+        average_score = sum(scores) / len(scores) if scores else None
+        output = output_dir / "ocr" / _artifact_name(job.path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(_format_ocr_markdown(job, lines, average_score), encoding="utf-8")
+        return _result(job, "ok", output, None)
+    except Exception as exc:  # noqa: BLE001 - manifest should capture parser failures.
+        return _result(job, "error", None, str(exc))
+
+
+def _extract_with_timeout(job: ParseJob, output_dir: Path, timeout_seconds: int) -> ExtractResult:
+    command = [
+        sys.executable,
+        "-m",
+        "anyfile_wiki.extract_worker",
+        "--path",
+        str(job.path),
+        "--parser",
+        job.parser,
+        "--out",
+        str(output_dir),
+        "--embedding-allowed",
+        "1" if job.embedding_allowed else "0",
+        "--source-policy",
+        job.source_policy,
+        "--source-size-bytes",
+        "" if job.source_size_bytes is None else str(job.source_size_bytes),
+        "--source-mtime",
+        "" if job.source_mtime is None else str(job.source_mtime),
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return _result(job, "error", None, f"{job.parser} timed out after {timeout_seconds}s")
+
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        return _result(job, "error", None, f"{job.parser} worker failed: {detail[:4000]}")
+
+    try:
+        payload = json.loads(completed.stdout)
+        return ExtractResult(**payload)
+    except Exception as exc:  # noqa: BLE001 - malformed worker output should be visible.
+        detail = (completed.stdout or completed.stderr or "").strip()
+        return _result(job, "error", None, f"{job.parser} worker returned invalid output: {exc}; {detail[:2000]}")
+
+
+def _format_ocr_markdown(job: ParseJob, lines: list[str], average_score: float | None) -> str:
+    score_line = "" if average_score is None else f"- average_score: {average_score:.4f}\n"
+    text = "\n".join(lines)
+    return (
+        f"# OCR: {job.path.name}\n\n"
+        f"- source: `{job.path}`\n"
+        f"- parser: rapidocr\n"
+        f"- lines: {len(lines)}\n"
+        f"{score_line}\n"
+        "## Text\n\n"
+        f"{text}\n"
+    )
+
+
+def _extract_xlsx_preview(path: Path) -> str:
+    from openpyxl import load_workbook  # type: ignore
+
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        lines = _spreadsheet_header(path, len(workbook.sheetnames), "openpyxl")
+        for sheet_name in workbook.sheetnames[:20]:
+            sheet = workbook[sheet_name]
+            rows = _sheet_preview_rows(sheet.iter_rows(max_row=30, max_col=12, values_only=True), limit=12)
+            lines.extend(_format_sheet_preview(sheet_name, sheet.max_row, sheet.max_column, rows))
+        if len(workbook.sheetnames) > 20:
+            lines.append(f"\n_还有 {len(workbook.sheetnames) - 20} 个工作表未展开。_")
+        return "\n".join(lines).rstrip() + "\n"
+    finally:
+        close = getattr(workbook, "close", None)
+        if callable(close):
+            close()
+
+
+def _extract_xls_preview(path: Path) -> str:
+    import xlrd  # type: ignore
+
+    workbook = xlrd.open_workbook(str(path), on_demand=True)
+    try:
+        sheet_names = workbook.sheet_names()
+        lines = _spreadsheet_header(path, len(sheet_names), "xlrd")
+        for sheet_name in sheet_names[:20]:
+            sheet = workbook.sheet_by_name(sheet_name)
+            raw_rows = (
+                [sheet.cell_value(row_index, col_index) for col_index in range(min(sheet.ncols, 12))]
+                for row_index in range(min(sheet.nrows, 30))
+            )
+            rows = _sheet_preview_rows(raw_rows, limit=12)
+            lines.extend(_format_sheet_preview(sheet_name, sheet.nrows, sheet.ncols, rows))
+        if len(sheet_names) > 20:
+            lines.append(f"\n_还有 {len(sheet_names) - 20} 个工作表未展开。_")
+        return "\n".join(lines).rstrip() + "\n"
+    finally:
+        release = getattr(workbook, "release_resources", None)
+        if callable(release):
+            release()
+
+
+def _spreadsheet_header(path: Path, sheet_count: int, engine: str) -> list[str]:
+    return [
+        f"# 表格摘要: {path.name}",
+        "",
+        f"- source: `{path}`",
+        f"- parser: spreadsheet_preview",
+        f"- engine: {engine}",
+        f"- sheets: {sheet_count}",
+        "",
+    ]
+
+
+def _sheet_preview_rows(rows, *, limit: int) -> list[list[str]]:
+    preview: list[list[str]] = []
+    for row in rows:
+        values = [_cell_text(value) for value in row]
+        if any(values):
+            preview.append(values)
+        if len(preview) >= limit:
+            break
+    return preview
+
+
+def _format_sheet_preview(sheet_name: str, row_count: int | None, col_count: int | None, rows: list[list[str]]) -> list[str]:
+    lines = [
+        f"## 工作表: {sheet_name}",
+        "",
+        f"- rows: {row_count or 0}",
+        f"- columns: {col_count or 0}",
+        "",
+    ]
+    if not rows:
+        lines.extend(["_未发现可预览的非空单元格。_", ""])
+        return lines
+
+    width = max(len(row) for row in rows)
+    padded = [row + [""] * (width - len(row)) for row in rows]
+    header = padded[0]
+    body = padded[1:] or [[""] * width]
+    lines.append("| " + " | ".join(_escape_table_cell(cell or f"列{index + 1}") for index, cell in enumerate(header)) + " |")
+    lines.append("| " + " | ".join("---" for _ in range(width)) + " |")
+    for row in body[:11]:
+        lines.append("| " + " | ".join(_escape_table_cell(cell) for cell in row) + " |")
+    lines.append("")
+    return lines
+
+
+def _cell_text(value) -> str:
+    if value is None:
+        return ""
+    text = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ").strip()
+    return _truncate_cell(text, 120)
+
+
+def _escape_table_cell(text: str) -> str:
+    return text.replace("|", "\\|")
+
+
+def _truncate_cell(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def _result(job: ParseJob, status: str, output_path: Path | None, error: str | None) -> ExtractResult:

@@ -36,7 +36,25 @@ CODE_EXTENSIONS = {
 }
 
 CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".ini", ".cfg"}
-DOC_EXTENSIONS = {".md", ".txt", ".rst", ".html", ".htm", ".pdf", ".docx", ".pptx", ".xlsx"}
+DOC_EXTENSIONS = {
+    ".md",
+    ".txt",
+    ".rst",
+    ".html",
+    ".htm",
+    ".pdf",
+    ".docx",
+    ".pptx",
+    ".xls",
+    ".xlsx",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
+}
 
 TOPIC_KEYWORDS = {
     "privacy": ("privacy", "隐私", "deny", "metadata_only", "no_embedding", "secret"),
@@ -197,7 +215,7 @@ def analyze_extract_record(
             key_points = semantic.key_points
             model_notes = semantic.model_notes
         else:
-            needs_human_review = confidence < 0.65
+            needs_human_review = review_reason in {"rules_low_signal", "rules_only_needs_semantic_review"}
             key_points = None
             model_notes = None
 
@@ -401,7 +419,7 @@ def assess_rules_confidence(
     score = min(round(score, 2), 0.75)
     if score < 0.4:
         return score, "rules_low_signal"
-    if score < 0.65:
+    if score < 0.55:
         return score, "rules_only_needs_semantic_review"
     return score, "rules_only_optional_review"
 

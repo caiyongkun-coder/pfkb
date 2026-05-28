@@ -16,6 +16,7 @@ from .review_ui import write_human_review_html
 class ReviewItem:
     path: str
     category: str
+    reason_code: str
     reason: str
     action: str
     severity: str
@@ -67,6 +68,7 @@ def build_review_items(
                 ReviewItem(
                     path=path,
                     category="cloud_forbidden_by_policy",
+                    reason_code="cloud_forbidden_by_policy",
                     reason="隐私策略为 `no_embedding`，禁止云端处理或语义向量化。",
                     action="保持本地处理；如确实需要云端复核，请先移动低敏副本到显式授权目录，并重新确认云端风险。",
                     severity="high",
@@ -82,6 +84,7 @@ def build_review_items(
                 ReviewItem(
                     path=path,
                     category="unsupported_format",
+                    reason_code="unsupported_format",
                     reason=f"当前没有针对扩展名 `{record.get('extension') or '(none)'}` 的解析器。",
                     action="新增解析器或转换文件格式；短期内也可以由用户手动补充说明和标签。",
                     severity="medium",
@@ -97,6 +100,7 @@ def build_review_items(
                 ReviewItem(
                     path=path,
                     category="not_extracted",
+                    reason_code="not_extracted",
                     reason="隐私策略允许提取正文，但当前还没有提取结果。",
                     action="运行 `anyfile-wiki extract`；如果这个文件暂时不重要，可以先保留在待整理清单里。",
                     severity="medium",
@@ -108,12 +112,14 @@ def build_review_items(
             continue
 
         if latest and latest.get("status") in {"error", "skipped"}:
+            reason_code = classify_extraction_problem(latest)
             items.append(
                 ReviewItem(
                     path=path,
                     category="extraction_problem",
+                    reason_code=reason_code,
                     reason=str(latest.get("error") or latest.get("skip_reason") or latest.get("status")),
-                    action="安装缺失解析依赖、重试提取、转换格式，或由用户手动补充说明和标签。",
+                    action=_extraction_problem_action(reason_code),
                     severity="high" if latest.get("status") == "error" else "medium",
                     access_policy=access_policy,
                     policy_source=str(record.get("policy_source") or ""),
@@ -126,12 +132,13 @@ def build_review_items(
         if analysis:
             needs_human_review = bool(analysis.get("needs_human_review"))
             method = str(analysis.get("analysis_method") or "")
-            if needs_human_review or method == "rules":
+            if needs_human_review:
                 review_reason = str(analysis.get("review_reason") or "rules_only_no_llm")
                 items.append(
                     ReviewItem(
                         path=path,
                         category="rules_only_or_low_confidence",
+                        reason_code=review_reason,
                         reason=f"{_analysis_review_reason_label(review_reason)}（`{review_reason}`）",
                         action="优先使用本地 LLM 复核；也可以人工确认摘要和标签。暂不处理时，保留规则版结果即可。",
                         severity="low" if not needs_human_review else "medium",
@@ -150,6 +157,7 @@ def build_review_items(
                 ReviewItem(
                     path=path,
                     category="cloud_not_authorized",
+                    reason_code="cloud_not_authorized",
                     reason="当前配置为云端模式，但这个路径没有被显式授权，正文不能发送到云端。",
                     action="保持本地处理；如果确认低敏且愿意承担风险，再把目录加入云端授权路径；也可以人工整理。",
                     severity="medium",
@@ -179,6 +187,7 @@ def write_review_md(items: list[ReviewItem], path: str | Path) -> None:
     for item in items:
         by_category[item.category].append(item)
     counts = Counter(item.category for item in items)
+    reason_counts = Counter(item.reason_code for item in items)
     lines = [
         "# 人工待整理清单",
         "",
@@ -202,6 +211,10 @@ def write_review_md(items: list[ReviewItem], path: str | Path) -> None:
     ]
     for category, count in counts.most_common():
         lines.append(f"- {_category_label(category)}（`{category}`）：{count}")
+    if reason_counts:
+        lines.extend(["", "### 原因代码统计", ""])
+        for reason_code, count in reason_counts.most_common():
+            lines.append(f"- `{reason_code}`：{count}")
 
     for category in sorted(by_category):
         lines.extend(["", f"## {_category_label(category)}", ""])
@@ -214,6 +227,7 @@ def write_review_md(items: list[ReviewItem], path: str | Path) -> None:
                     "",
                     f"- 路径：`{item.path}`",
                     f"- 严重程度：{_severity_label(item.severity)}（`{item.severity}`）",
+                    f"- 原因代码：`{item.reason_code}`",
                     f"- 原因：{item.reason}",
                     f"- 建议动作：{item.action}",
                 ]
@@ -236,11 +250,51 @@ def review_stats(items: list[ReviewItem]) -> dict[str, int]:
     return dict(Counter(item.category for item in items))
 
 
+def review_reason_stats(items: list[ReviewItem]) -> dict[str, int]:
+    return dict(Counter(item.reason_code for item in items))
+
+
+def classify_extraction_problem(record: dict[str, Any]) -> str:
+    status = str(record.get("status") or "")
+    error = str(record.get("error") or record.get("skip_reason") or "")
+    lower = error.lower()
+    if "missingdependencyexception" in error or "dependencies needed" in lower or "unavailable" in lower:
+        return "missing_parser_dependency"
+    if "timed out" in lower:
+        return "parser_timeout"
+    if "produced no text" in lower or "empty" in lower:
+        return "no_text_extracted"
+    if "no converter attempted" in lower or "not supported" in lower:
+        return "parser_unsupported_format"
+    if "password" in lower or "encrypted" in lower:
+        return "encrypted_or_password_protected"
+    if "permission" in lower or "access denied" in lower:
+        return "permission_denied"
+    if status == "skipped":
+        return "parser_skipped"
+    return "parser_error"
+
+
+def _extraction_problem_action(reason_code: str) -> str:
+    actions = {
+        "missing_parser_dependency": "安装或更新解析依赖后重试提取；如果依赖已安装，这通常是旧失败记录，优先运行 `anyfile-wiki extract --retry-failed`。",
+        "parser_timeout": "提高单文件超时时间、改用轻量专用解析器，或把大文件加入人工整理清单。",
+        "no_text_extracted": "如果是图片或扫描件，启用 OCR 后重试；如果仍为空，人工补充说明和标签。",
+        "parser_unsupported_format": "新增解析器或先转换文件格式；短期内可人工补充说明和标签。",
+        "encrypted_or_password_protected": "需要用户确认密码或提供非加密副本；自动流程不应绕过保护。",
+        "permission_denied": "检查文件权限或是否被其他程序占用，然后重试。",
+        "parser_skipped": "安装对应可选依赖或确认该类型暂不自动解析。",
+        "parser_error": "查看错误详情，重试提取、转换格式，或由用户手动补充说明和标签。",
+    }
+    return actions.get(reason_code, actions["parser_error"])
+
+
 def _policy_item(record: dict[str, Any], access_policy: str) -> ReviewItem:
     if access_policy == "deny":
         return ReviewItem(
             path=str(record.get("path") or ""),
             category="policy_blocked",
+            reason_code="policy_blocked",
             reason="隐私策略明确拒绝读取这个文件。",
             action="保持阻止读取；如果需要纳入知识库，请在自动流程之外手动补充安全摘要或标签。",
             severity="high",
@@ -251,6 +305,7 @@ def _policy_item(record: dict[str, Any], access_policy: str) -> ReviewItem:
     return ReviewItem(
         path=str(record.get("path") or ""),
         category="metadata_only",
+        reason_code="metadata_only",
         reason="隐私策略只允许登记元数据，不能打开正文。",
         action="确认保持 metadata-only；如果需要整理，只能手动添加不含敏感内容的安全标签。",
         severity="medium",
