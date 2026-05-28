@@ -139,8 +139,14 @@ agent 生成 human-review.html
 当前读取命令：
 
 ```powershell
-anyfile-wiki decisions --decisions data/first-review/review-decisions.jsonl --out data/first-review/decisions-summary.md
+anyfile-wiki decisions --decisions data/first-review/review-decisions.jsonl --out data/first-review/decisions-summary.md --actions-out data/first-review/next-actions.jsonl --plan-out data/first-review/decision-plan.md
 ```
+
+当前会生成：
+
+- `decisions-summary.md`：批复摘要。
+- `next-actions.jsonl`：agent 可读取的后续动作清单。
+- `decision-plan.md`：人类和 agent 可共同审阅的执行计划。
 
 建议批复文件：
 
@@ -172,6 +178,8 @@ data/first-review/review-decisions.jsonl
 - 生成隐私配置调整建议。
 - 重新提取或重新分析。
 - 记录人工修正标签。
+
+当前实现已经先把这些动作落成计划文件，不会直接修改源文件或隐私配置。尤其是云端 LLM 相关决策，只会成为“云端授权候选”，必须等配置显式授权路径和风险确认后才能执行。
 
 ### 4. 生成 Agent 可用知识资产
 
@@ -257,8 +265,7 @@ agent 读取 review-decisions.jsonl 并继续
 
 ## 当前建议的下一步
 
-1. 增加后续应用决策的命令，让 agent 能把人类批复显式转成配置、重跑计划或忽略清单。
-2. 为日常扫描补充 `run-state.json` 进度恢复机制。
+1. 设计并实现 `run-state.json`，支持日常空闲扫描的进度保存和断点续跑。
+2. 让 agent 读取 `next-actions.jsonl` 后自动触发本地 LLM 复核、忽略候选汇总和人工标签覆盖。
 3. 扩展 `human-review.html` 的批量批复和标签编辑能力。
-4. 设计 `run-state.json`，支持日常空闲扫描的进度保存和断点续跑。
-5. 再确认 agent 最终消费的知识库形态：JSONL、Markdown/wiki、MCP/GNO，或组合。
+4. 再确认 agent 最终消费的知识库形态：JSONL、Markdown/wiki、MCP/GNO，或组合。

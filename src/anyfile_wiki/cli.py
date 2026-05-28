@@ -12,10 +12,15 @@ from .analyze import (
     write_analysis_outputs,
 )
 from .decisions import (
+    actions_as_dicts,
+    build_decision_actions,
     decisions_as_dicts,
+    format_action_plan_summary,
     format_decisions_summary,
     load_review_decisions,
+    write_decision_plan_md,
     write_decisions_summary_md,
+    write_next_actions_jsonl,
 )
 from .html import load_browser_records, write_knowledge_browser_html
 from .inventory import Inventory
@@ -142,6 +147,8 @@ def build_parser() -> ArgumentParser:
     decisions = subparsers.add_parser("decisions", help="Read human review decisions exported from HTML")
     decisions.add_argument("--decisions", default="data/review/review-decisions.jsonl", help="review-decisions.jsonl path")
     decisions.add_argument("--out", default=None, help="Optional Markdown summary path")
+    decisions.add_argument("--actions-out", default=None, help="Optional next-actions.jsonl path for agents")
+    decisions.add_argument("--plan-out", default=None, help="Optional Markdown decision plan path")
     decisions.add_argument("--json", action="store_true", help="Emit JSON")
     decisions.set_defaults(func=cmd_decisions)
 
@@ -463,14 +470,34 @@ def cmd_decisions(args) -> int:
     except ValueError as exc:
         print(f"invalid decisions file: {exc}", file=sys.stderr)
         return 2
+    actions = build_decision_actions(decisions)
     if args.out:
         write_decisions_summary_md(decisions, args.out)
+    if args.actions_out:
+        write_next_actions_jsonl(actions, args.actions_out)
+    if args.plan_out:
+        write_decision_plan_md(actions, args.plan_out)
     if args.json:
-        print(json.dumps({"records": decisions_as_dicts(decisions)}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "records": decisions_as_dicts(decisions),
+                    "actions": actions_as_dicts(actions),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 0
     print(format_decisions_summary(decisions))
+    if args.actions_out or args.plan_out:
+        print(format_action_plan_summary(actions))
     if args.out:
         print(f"decisions_summary_md: {Path(args.out)}")
+    if args.actions_out:
+        print(f"next_actions_jsonl: {Path(args.actions_out)}")
+    if args.plan_out:
+        print(f"decision_plan_md: {Path(args.plan_out)}")
     return 0
 
 

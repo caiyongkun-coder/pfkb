@@ -270,7 +270,7 @@ def test_decisions_cli_reads_exported_jsonl_and_writes_summary(tmp_path):
             ensure_ascii=False,
         )
         + "\n",
-        encoding="utf-8",
+        encoding="utf-8-sig",
     )
     summary_path = tmp_path / "decisions-summary.md"
 
@@ -282,6 +282,66 @@ def test_decisions_cli_reads_exported_jsonl_and_writes_summary(tmp_path):
     assert "decisions_summary_md" in stdout
     assert summary_path.exists()
     assert "人工批复结果摘要" in summary_path.read_text(encoding="utf-8")
+
+
+def test_decisions_cli_writes_agent_action_plan(tmp_path):
+    decisions_path = tmp_path / "review-decisions.jsonl"
+    records = [
+        {
+            "path": "C:/Users/me/Documents/allowed.md",
+            "category": "rules_only_or_low_confidence",
+            "severity": "medium",
+            "decision": "allow_local_llm",
+            "manual_tags": ["topic/semantic_analysis"],
+        },
+        {
+            "path": "C:/Users/me/Documents/cloud-candidate.md",
+            "category": "cloud_not_authorized",
+            "severity": "high",
+            "decision": "allow_cloud_llm",
+        },
+        {
+            "path": "C:/Users/me/Downloads/old.tmp",
+            "category": "unsupported_format",
+            "severity": "low",
+            "decision": "ignore",
+        },
+    ]
+    decisions_path.write_text(
+        "\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n",
+        encoding="utf-8",
+    )
+    actions_path = tmp_path / "next-actions.jsonl"
+    plan_path = tmp_path / "decision-plan.md"
+
+    code, stdout, stderr = _run_cli(
+        [
+            "decisions",
+            "--decisions",
+            str(decisions_path),
+            "--actions-out",
+            str(actions_path),
+            "--plan-out",
+            str(plan_path),
+            "--json",
+        ]
+    )
+
+    assert code == 0, stderr
+    payload = json.loads(stdout)
+    assert len(payload["records"]) == 3
+    assert len(payload["actions"]) == 4
+    assert actions_path.exists()
+    actions = [json.loads(line) for line in actions_path.read_text(encoding="utf-8").splitlines()]
+    action_names = {record["action"] for record in actions}
+    assert "queue_local_llm_review" in action_names
+    assert "record_manual_tags" in action_names
+    assert "propose_cloud_llm_authorization" in action_names
+    assert "add_to_ignore_candidates" in action_names
+    assert any(record["requires_confirmation"] for record in actions if record["action"] == "propose_cloud_llm_authorization")
+    plan_text = plan_path.read_text(encoding="utf-8")
+    assert "人工批复后续执行计划" in plan_text
+    assert "不会直接移动、删除、重命名源文件" in plan_text
 
 
 def test_decisions_cli_rejects_unknown_decision(tmp_path):

@@ -48,7 +48,7 @@ data/first-html/knowledge-index.html
 ## 后续计划
 
 - 扩展 `human-review.html` 的批量批复、标签编辑和决策复查能力。
-- 增加显式应用 `review-decisions.jsonl` 的后续流程，例如重跑本地 LLM、生成忽略清单或提出隐私配置修改建议。
+- 让 agent 读取 `next-actions.jsonl` 后自动触发本地 LLM 复核、忽略候选汇总或隐私配置修改建议。
 - 增加主题页、项目页、来源应用页和时间线。
 - 增加可选的本地搜索索引，让大规模知识库仍然能快速筛选。
 - 继续保留 Markdown 和 JSONL 输出，HTML 只是更适合人类浏览的一层。

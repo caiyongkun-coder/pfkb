@@ -26,13 +26,15 @@
 - 已能生成 `human-review.html` 人工复核批复页。
 - 人工复核页支持确认当前结果、允许本地 LLM、允许云端 LLM、已人工整理、忽略、稍后处理、保持隐私。
 - 人工复核页可导出 `review-decisions.jsonl`。
-- 新增 `anyfile-wiki decisions`，可读取 `review-decisions.jsonl` 并生成批复摘要。
+- `anyfile-wiki decisions` 可读取 `review-decisions.jsonl`，生成批复摘要、`next-actions.jsonl` 和 `decision-plan.md`。
+- `next-actions.jsonl` 已能把人类批复转成 agent 后续动作：本地 LLM 复核队列、云端授权候选、忽略候选、人工标签覆盖、稍后复核和保持隐私。
+- `review-decisions.jsonl` 读取已兼容 Windows PowerShell 常见的 UTF-8 BOM 文件。
 - `file://` 静态打开时，批复按钮已能即时响应。
 - 导出批复后，按钮会动画变成 `✓ 导出完成 / Exported`；后续再修改批复会恢复为待导出状态。
 
 ## 最新验证
 
-- `python -m pytest -q`：`71 passed`
+- `python -m pytest -q`：`72 passed`
 - `anyfile-wiki --help` 已包含 `decisions` 命令。
 - 演示页已生成：
   - `data/review-html-demo/human-review.html`
@@ -44,17 +46,11 @@
 - `knowledge-index.html` 和 `human-review.html` 都是静态页面，不需要后端服务。
 - 静态页面只负责人类浏览和批复，不直接启动本地命令。
 - 人类批复导出为 `review-decisions.jsonl` 后，由 agent 或 CLI 继续读取并执行下一步。
+- 当前“执行下一步”先落成计划文件，不直接移动、删除、重命名源文件，也不直接修改隐私配置。
 - 云端 LLM 必须显式授权目录和确认风险；默认不允许云端读取本地文件。
 
 ## 下一步建议
 
-优先做“决策应用层”：
+优先做日常运行的 `run-state.json`，让长时间扫描、提取和分析可以暂停、恢复和增量推进。
 
-1. 读取 `review-decisions.jsonl`。
-2. 把 `allow_local_llm` 转成待本地 LLM 复核队列。
-3. 把 `ignore` 转成忽略清单。
-4. 把 `mark_manual` 和 `manual_tags` 转成人工标签覆盖记录。
-5. 把 `allow_cloud_llm` 转成云端授权候选建议，但不直接修改隐私配置。
-6. 生成一份 agent 可执行的后续计划，例如 `next-actions.jsonl` 或 `decision-plan.md`。
-
-之后再做日常运行的 `run-state.json`，让长时间扫描、提取和分析可以暂停、恢复和增量推进。
+随后让 agent 自动消费 `next-actions.jsonl`：先处理本地 LLM 复核、人工标签覆盖和忽略候选汇总；云端 LLM 候选仍只生成配置建议，必须等待人类确认。

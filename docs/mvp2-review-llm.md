@@ -122,8 +122,14 @@ anyfile-wiki html --analysis data/first-analyze/knowledge-index.jsonl --out data
 读取批复结果：
 
 ```powershell
-anyfile-wiki decisions --decisions data/first-review/review-decisions.jsonl --out data/first-review/decisions-summary.md
+anyfile-wiki decisions --decisions data/first-review/review-decisions.jsonl --out data/first-review/decisions-summary.md --actions-out data/first-review/next-actions.jsonl --plan-out data/first-review/decision-plan.md
 ```
+
+生成文件：
+
+- `decisions-summary.md`：给人看的批复统计和明细。
+- `next-actions.jsonl`：给 agent 读取的后续动作清单。
+- `decision-plan.md`：给人和 agent 共同审阅的后续执行计划。
 
 当前 HTML 审阅页支持这些批复动作：
 
@@ -134,7 +140,7 @@ anyfile-wiki decisions --decisions data/first-review/review-decisions.jsonl --ou
 - 标记为已人工整理。
 - 保持本地-only，不允许云端读取。
 
-这些交互不会悄悄删除文件，也不会直接改隐私配置。当前只把用户选择写入独立记录；后续再增加显式应用决策的流程。
+这些交互不会悄悄删除文件，也不会直接改隐私配置。当前会先把用户选择写入独立记录，再由 `anyfile-wiki decisions` 转成后续动作计划，例如本地 LLM 复核队列、忽略候选、人工标签覆盖记录和云端授权候选。
 
 ## 设计原则
 
