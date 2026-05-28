@@ -118,7 +118,7 @@ def build_review_items(
                     path=path,
                     category="extraction_problem",
                     reason_code=reason_code,
-                    reason=str(latest.get("error") or latest.get("skip_reason") or latest.get("status")),
+                    reason=_extraction_problem_reason(latest, reason_code),
                     action=_extraction_problem_action(reason_code),
                     severity="high" if latest.get("status") == "error" else "medium",
                     access_policy=access_policy,
@@ -287,6 +287,40 @@ def _extraction_problem_action(reason_code: str) -> str:
         "parser_error": "查看错误详情，重试提取、转换格式，或由用户手动补充说明和标签。",
     }
     return actions.get(reason_code, actions["parser_error"])
+
+
+def _extraction_problem_reason(record: dict[str, Any], reason_code: str) -> str:
+    raw = str(record.get("error") or record.get("skip_reason") or record.get("status") or "").strip()
+    lower = raw.lower()
+    messages = {
+        "missing_parser_dependency": "缺少解析依赖，当前环境还不能读取这种文件内容。",
+        "parser_timeout": "解析器处理时间过长，单文件提取已超时。",
+        "no_text_extracted": "解析器没有提取到可用正文，可能是扫描件、图片内容或空文档。",
+        "parser_unsupported_format": "当前解析器暂不支持这个文件格式或内部结构。",
+        "encrypted_or_password_protected": "文件可能被加密或需要密码，自动流程不能绕过保护。",
+        "permission_denied": "当前进程没有权限读取文件，或文件被其他程序占用。",
+        "parser_skipped": "解析器跳过了这个文件，通常是缺少可选依赖或类型暂未启用。",
+        "parser_error": "解析器运行失败，暂时无法自动提取正文。",
+    }
+    message = messages.get(reason_code, messages["parser_error"])
+    if "pptxconverter" in lower and "unrecognized shape type" in lower:
+        message = "PPTX 中存在当前转换器不认识的形状对象，导致正文提取失败。"
+    elif "notimplementederror" in lower:
+        message = "解析器遇到尚未实现的文件结构，无法完成转换。"
+    elif "file conversion failed" in lower:
+        message = "文件转换失败，当前解析器没有成功把它转成可分析文本。"
+    elif "missingdependencyexception" in raw:
+        message = messages["missing_parser_dependency"]
+    if not raw:
+        return message
+    return f"{message} 原始错误（英文技术信息）：{_compact_error(raw)}"
+
+
+def _compact_error(text: str, *, max_chars: int = 600) -> str:
+    compact = " ".join(str(text).split())
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 1].rstrip() + "…"
 
 
 def _policy_item(record: dict[str, Any], access_policy: str) -> ReviewItem:

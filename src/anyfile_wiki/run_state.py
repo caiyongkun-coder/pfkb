@@ -8,7 +8,7 @@ import uuid
 
 
 RUN_STATE_VERSION = 1
-STAGE_ORDER = ("scan", "extract", "analyze", "review", "html")
+STAGE_ORDER = ("scan", "extract", "analyze", "review", "assets", "html")
 
 
 def new_run_state(

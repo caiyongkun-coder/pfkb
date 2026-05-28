@@ -132,6 +132,7 @@ def _dimension_payload(config: dict[str, Any] | None) -> list[dict[str, str]]:
             {
                 "id": dimension_id,
                 "zh": _text(item.get("zh") or dimension_id),
+                "en": _text(item.get("en")),
                 "purpose": _text(item.get("purpose")),
             }
         )
@@ -936,13 +937,22 @@ _HTML_TEMPLATE = r"""<!doctype html>
 
     const labels = {
       dimensions: {
-        document: "文档形态",
+        document: "文档身份",
         topic: "主题",
         workflow: "处理状态",
         sensitivity: "敏感度",
-        collection: "集合",
+        collection: "浏览层级",
         source: "来源",
         other: "其他标签"
+      },
+      dimensionEnglish: {
+        document: "Document",
+        topic: "Topic",
+        workflow: "Workflow",
+        sensitivity: "Sensitivity",
+        collection: "Collection",
+        source: "Source",
+        other: "Other tags"
       },
       contentTypes: {
         code: "代码",
@@ -978,6 +988,34 @@ _HTML_TEMPLATE = r"""<!doctype html>
       }
     };
 
+    const fallbackTags = {
+      analysis: { zh: "内容分析", en: "Analysis", dimension: "topic" },
+      cli: { zh: "命令行", en: "CLI", dimension: "topic" },
+      code: { zh: "代码", en: "Code", dimension: "document" },
+      config: { zh: "配置", en: "Config", dimension: "document" },
+      configuration: { zh: "配置", en: "Configuration", dimension: "topic" },
+      document: { zh: "普通文档", en: "Document", dimension: "document" },
+      docs: { zh: "项目文档", en: "Docs", dimension: "document" },
+      extract: { zh: "正文提取", en: "Extraction", dimension: "topic" },
+      file: { zh: "普通文件", en: "File", dimension: "document" },
+      inventory: { zh: "清单数据库", en: "Inventory", dimension: "topic" },
+      license: { zh: "许可证", en: "License", dimension: "topic" },
+      privacy: { zh: "隐私", en: "Privacy", dimension: "sensitivity" },
+      readme: { zh: "说明文档", en: "README", dimension: "document" },
+      review: { zh: "人工复核", en: "Review", dimension: "workflow" },
+      roadmap: { zh: "路线图", en: "Roadmap", dimension: "topic" },
+      roots: { zh: "扫描目录", en: "Roots", dimension: "topic" },
+      scan: { zh: "扫描", en: "Scan", dimension: "topic" },
+      tests: { zh: "测试", en: "Tests", dimension: "document" },
+      "topic/business_budgeting": { zh: "预算测算", en: "Budgeting", dimension: "topic" },
+      "topic/financial_data": { zh: "金融财务数据", en: "Financial data", dimension: "topic" },
+      "topic/data_reconciliation": { zh: "数据核对", en: "Data reconciliation", dimension: "topic" },
+      "topic/contract_agreement": { zh: "合同协议", en: "Contract", dimension: "topic" },
+      "topic/project_delivery": { zh: "项目交付", en: "Project delivery", dimension: "topic" },
+      "topic/reporting_material": { zh: "汇报培训材料", en: "Reporting", dimension: "topic" },
+      "topic/template_form": { zh: "模板表样", en: "Template", dimension: "topic" }
+    };
+
     const tagById = new Map((ANYFILE_WIKI_DATA.tags || []).map((tag) => [tag.id, tag]));
     const dimensionById = new Map((ANYFILE_WIKI_DATA.dimensions || []).map((dimension) => [dimension.id, dimension]));
     const state = {
@@ -1004,12 +1042,13 @@ _HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function tagInfo(tag) {
-      const meta = tagById.get(tag) || {};
-      const dimension = meta.dimension || (String(tag).includes("/") ? String(tag).split("/", 1)[0] : "other");
+      const fallback = fallbackTags[tag] || {};
+      const meta = tagById.get(tag) || fallback;
+      const dimension = meta.dimension || fallback.dimension || (String(tag).includes("/") ? String(tag).split("/", 1)[0] : "other");
       return {
         id: tag,
-        zh: meta.zh || localName(tag),
-        en: meta.en || tag,
+        zh: tagDisplayLabel(tag, meta, fallback),
+        en: meta.en || fallback.en || tag,
         dimension
       };
     }
@@ -1019,9 +1058,19 @@ _HTML_TEMPLATE = r"""<!doctype html>
       return parts[parts.length - 1].replace(/_/g, " ");
     }
 
+    function tagDisplayLabel(tag, meta, fallback) {
+      const zh = meta.zh || fallback.zh || localName(tag);
+      const en = meta.en || fallback.en || "";
+      if (!en || en === tag || zh.includes(" / ")) return zh;
+      return `${zh} / ${en}`;
+    }
+
     function dimensionLabel(dimension) {
       const meta = dimensionById.get(dimension) || {};
-      return meta.zh || labels.dimensions[dimension] || dimension;
+      const zh = meta.zh || labels.dimensions[dimension] || dimension;
+      const en = meta.en || labels.dimensionEnglish[dimension] || "";
+      if (!en || zh.includes(" / ")) return zh;
+      return `${zh} / ${en}`;
     }
 
     function contentTypeLabel(value) {
@@ -1291,6 +1340,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
       for (const tag of tags) {
         const parts = tag.split("/");
         const localParts = parts[0] === dimension ? parts.slice(1) : parts;
+        if (!localParts.length) localParts.push(tag);
         let node = root;
         node.count += counts.get(tag);
         let prefix = dimension;

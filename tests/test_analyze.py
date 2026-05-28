@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from anyfile_wiki.analyze import analyze_extract_records, classify_content_type, infer_tags
+from anyfile_wiki.analyze import analyze_extract_records, classify_content_type, infer_tags, summarize_text
 from anyfile_wiki.cli import main as cli_main
 from anyfile_wiki.inventory import Inventory
 from anyfile_wiki.llm_client import LLMAnalysisRequest, LLMAnalysisResponse
@@ -497,6 +497,42 @@ def test_classification_and_tags_use_path_and_content():
 
     tags = infer_tags("src/anyfile_wiki/cli.py", "argparse command scan extract inventory", "code")
     assert {"code", "cli", "scan", "extract", "inventory"} <= set(tags)
+
+
+def test_summarize_text_keeps_followup_after_colon_lead_in():
+    summary = summarize_text(
+        "\n\n".join(
+            [
+                "金融市场部20250630的数据存在以下问题：",
+                "转贴现执行利率低于市场参考利率，需要确认同业转贴现交易的曲线减点逻辑。",
+                "| --- | --- |",
+                "其他金融资产以不良为主，长期股权投资无收益率，需要按逾期逻辑考虑。",
+            ]
+        )
+    )
+
+    assert "存在以下问题" in summary
+    assert "转贴现执行利率" in summary
+    assert "其他金融资产" in summary
+    assert "| ---" not in summary
+
+
+def test_summarize_text_followup_after_skipped_title_does_not_repeat_lead_in():
+    summary = summarize_text(
+        "\n\n".join(
+            [
+                "# Project Plan",
+                "以下问题:",
+                "First issue needs owner confirmation.",
+                "Second issue needs timeline confirmation.",
+            ]
+        ),
+        title="Project Plan",
+    )
+
+    assert summary.count("以下问题:") == 1
+    assert summary.startswith("以下问题: First issue")
+    assert "Second issue" in summary
 
 
 def test_analyze_cli_writes_knowledge_index_outputs(tmp_path):

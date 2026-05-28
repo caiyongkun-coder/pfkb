@@ -98,6 +98,9 @@ def test_render_knowledge_browser_html_uses_chinese_ui_and_embedded_data():
     assert "基本信息 / Basic info" in html
     assert 'docs: "项目文档 / Docs"' in html
     assert 'document: "普通文档 / Document"' in html
+    assert 'inventory: { zh: "清单数据库", en: "Inventory", dimension: "topic" }' in html
+    assert '"topic/business_budgeting": { zh: "预算测算", en: "Budgeting", dimension: "topic" }' in html
+    assert 'topic: "Topic"' in html
     assert "隐私策略" in html
     assert "topic/privacy_policy" in html
 
@@ -110,6 +113,16 @@ def test_render_knowledge_browser_html_escapes_script_endings_inside_json():
 
     assert "关闭 <\\/script> 标签" in html
     assert "关闭 </script> 标签" not in html
+
+
+def test_render_knowledge_browser_html_keeps_dimension_tag_as_tree_leaf():
+    html = render_knowledge_browser_html(
+        [_record(tags=["document"], primary_tag="document")],
+        tags_config=_tags_config(),
+    )
+
+    assert 'document: { zh: "普通文档", en: "Document", dimension: "document" }' in html
+    assert "if (!localParts.length) localParts.push(tag);" in html
 
 
 def test_write_knowledge_browser_html_creates_static_asset_browser(tmp_path):

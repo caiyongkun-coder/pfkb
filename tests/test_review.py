@@ -168,6 +168,41 @@ def test_review_items_include_policy_blocks_extraction_gaps_and_rules_only(tmp_p
     assert "rules_only_or_low_confidence" in categories
 
 
+def test_extraction_problem_reason_prefers_chinese_with_raw_error_context(tmp_path):
+    source = tmp_path / "deck.pptx"
+    source.write_bytes(b"fixture")
+    file_records = [
+        {
+            "path": str(source),
+            "extension": ".pptx",
+            "is_dir": False,
+            "access_policy": "allow",
+            "policy_source": "test",
+            "policy_reason": "fixture",
+            "is_read_allowed": True,
+            "is_extract_allowed": True,
+        }
+    ]
+    latest_extracts = {
+        str(source): {
+            "status": "error",
+            "error": (
+                "File conversion failed after 1 attempts:\n"
+                " - PptxConverter threw NotImplementedError with message: "
+                "Shape instance of unrecognized shape type"
+            ),
+        }
+    }
+
+    items = build_review_items(file_records, latest_extracts)
+
+    assert len(items) == 1
+    assert items[0].reason_code == "parser_error"
+    assert "PPTX 中存在当前转换器不认识的形状对象" in items[0].reason
+    assert "原始错误（英文技术信息）" in items[0].reason
+    assert "PptxConverter" in items[0].reason
+
+
 def test_review_cli_writes_human_review_outputs(tmp_path):
     allowed = tmp_path / "allowed.md"
     denied = tmp_path / "secret.pem"

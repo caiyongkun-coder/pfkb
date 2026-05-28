@@ -33,7 +33,7 @@
 - `review-server` 服务版提交后，如果处在标准 run 目录结构中，会自动生成/刷新 `assets/asset-index.jsonl` 和 `html/knowledge-index.html`。
 - 资产页已能展示资产状态、人工批复、后续动作、二次确认、人工标签和隐私冲突提示。
 - `review-decisions.jsonl` 读取已兼容 Windows PowerShell 常见的 UTF-8 BOM 文件。
-- 新增 `anyfile-wiki run`，通过 `run-state.json` 分阶段推进 scan、extract、analyze、review 和 html，支持重复调用后继续下一小步。
+- 新增 `anyfile-wiki run`，通过 `run-state.json` 分阶段推进 scan、extract、analyze、review、assets 和 html，支持重复调用后继续下一小步。
 - `run-state.json` 当前记录 root、配置、输出路径、阶段状态、路径游标、分块次数、累计统计和最后一步结果。
 - `file://` 静态打开时，批复按钮已能即时响应。
 - 导出批复后，按钮会动画变成 `✓ 导出完成 / Exported`；后续再修改批复会恢复为待导出状态。

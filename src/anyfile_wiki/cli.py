@@ -32,7 +32,14 @@ from .llm_config import describe_llm_config, load_llm_config
 from .parse import extract_job, extract_jobs, plan_parse_jobs_from_records, write_manifest
 from .policy import PolicyEngine, describe_privacy_policy, load_policy
 from .report import write_access_log, write_scan_plan
-from .review import build_review_items, load_analysis_manifest, review_reason_stats, review_stats, write_review_outputs
+from .review import (
+    ReviewItem,
+    build_review_items,
+    load_analysis_manifest,
+    review_reason_stats,
+    review_stats,
+    write_review_outputs,
+)
 from .review_server import make_review_server
 from .roots import describe_roots_config, discover_candidate_roots, load_roots_config
 from .run_state import (
@@ -778,6 +785,8 @@ def _run_one_stage(state: dict, stage: str, args) -> dict:
         return _run_analyze_stage(state, args)
     if stage == "review":
         return _run_review_stage(state, args)
+    if stage == "assets":
+        return _run_assets_stage(state)
     if stage == "html":
         return _run_html_stage(state)
     raise ValueError(f"unsupported run stage: {stage}")
@@ -917,10 +926,11 @@ def _run_analyze_stage(state: dict, args) -> dict:
     with Inventory(paths["inventory"]) as inventory:
         latest = inventory.latest_analyzable_extracts_by_path()
     cursor = str(stage_state.get("cursor_path") or "")
+    cursor_key = _run_path_order_key(cursor) if cursor else ""
     records = [
         record
-        for record in sorted(latest.values(), key=lambda item: str(item.get("path", "")))
-        if not cursor or str(record.get("path", "")) > cursor
+        for record in sorted(latest.values(), key=lambda item: _run_path_order_key(str(item.get("path", ""))))
+        if not cursor_key or _run_path_order_key(str(record.get("path", ""))) > cursor_key
     ][:limit]
     method = str(config.get("analysis_method") or "rules")
     llm_config = load_llm_config(_optional_path(config.get("llm_config"))) if method in {"local-llm", "cloud-llm"} else None
@@ -962,10 +972,23 @@ def _run_analyze_stage(state: dict, args) -> dict:
 def _run_review_stage(state: dict, args) -> dict:
     paths = state["paths"]
     config = state["config"]
+    stage_state = state["stages"]["review"]
+    chunk = int(stage_state.get("chunks") or 0) + 1
+    limit = max(1, int(args.review_limit))
+    review_dir = Path(paths["review_dir"])
+    chunks_dir = review_dir / "chunks"
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    if chunk == 1:
+        for stale in chunks_dir.glob("human-review-*.jsonl"):
+            stale.unlink()
     analysis_records = load_analysis_manifest(paths["analysis_manifest"])
     llm_config = load_llm_config(_optional_path(config.get("llm_config")))
     with Inventory(paths["inventory"]) as inventory:
-        files = inventory.list_files(limit=max(1, int(args.review_limit)), include_dirs=False)
+        files = inventory.list_files_after(
+            after_path=stage_state.get("cursor_path"),
+            limit=limit,
+            include_dirs=False,
+        )
         latest_extracts = inventory.latest_extracts_by_path()
     items = build_review_items(
         files,
@@ -973,19 +996,69 @@ def _run_review_stage(state: dict, args) -> dict:
         analysis_records=analysis_records,
         llm_config=llm_config,
     )
-    outputs = write_review_outputs(items, paths["review_dir"])
-    stats = {"review_items": len(items), "by_category": review_stats(items)}
+    chunk_path = chunks_dir / f"human-review-{chunk:04d}.jsonl"
+    _write_review_chunk(items, chunk_path)
+    all_items = _load_review_chunks(chunks_dir)
+    outputs = write_review_outputs(all_items, paths["review_dir"])
+    status = "paused" if len(files) >= limit else "complete"
+    cursor_path = str(files[-1]["path"]) if files else stage_state.get("cursor_path")
+    stats = {
+        "files_inspected": len(files),
+        "review_items": len(items),
+        "by_category": review_stats(items),
+        "reason_codes": review_reason_stats(items),
+    }
     output_strings = {name: str(path) for name, path in outputs.items()}
-    message = f"wrote {len(items)} review items"
+    output_strings["chunk_review_jsonl"] = str(chunk_path)
+    message = f"reviewed {len(files)} files; wrote {len(all_items)} total review items"
     mark_stage_result(
         state,
         "review",
+        status=status,
+        message=message,
+        stats=stats,
+        outputs=output_strings,
+        cursor_path=cursor_path,
+    )
+    return {"stage": "review", "status": status, "message": message, "stats": stats, "outputs": output_strings}
+
+
+def _run_assets_stage(state: dict) -> dict:
+    paths = state["paths"]
+    config = state["config"]
+    analysis_path = Path(paths["knowledge_index"])
+    review_dir = Path(paths["review_dir"])
+    actions_path = review_dir / "next-actions.jsonl"
+    review_items_path = review_dir / "human-review.jsonl"
+    tags_config = load_tags_config(_optional_path(config.get("tags_config")))
+    analysis_records = load_jsonl_records(analysis_path)
+    action_records = load_jsonl_records(actions_path)
+    review_items = load_jsonl_records(review_items_path)
+    records = build_asset_index(analysis_records, action_records, review_items)
+    outputs = write_asset_outputs(
+        records,
+        paths["asset_dir"],
+        tags_config=tags_config,
+        source_path=analysis_path,
+    )
+    needs_review = sum(1 for record in records if bool(record.get("review_requires_confirmation")))
+    stats = {
+        "records": len(records),
+        "review_actions": len(action_records),
+        "review_items": len(review_items),
+        "needs_confirmation": needs_review,
+    }
+    output_strings = {name: str(path) for name, path in outputs.items()}
+    message = f"wrote asset index for {len(records)} records"
+    mark_stage_result(
+        state,
+        "assets",
         status="complete",
         message=message,
         stats=stats,
         outputs=output_strings,
     )
-    return {"stage": "review", "status": "complete", "message": message, "stats": stats, "outputs": output_strings}
+    return {"stage": "assets", "status": "complete", "message": message, "stats": stats, "outputs": output_strings}
 
 
 def _run_html_stage(state: dict) -> dict:
@@ -1015,6 +1088,26 @@ def _run_html_stage(state: dict) -> dict:
         outputs=output_strings,
     )
     return {"stage": "html", "status": "complete", "message": message, "stats": stats, "outputs": output_strings}
+
+
+def _write_review_chunk(items: list[ReviewItem], path: str | Path) -> None:
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8") as handle:
+        for item in items:
+            handle.write(json.dumps(asdict(item), ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _load_review_chunks(chunks_dir: str | Path) -> list[ReviewItem]:
+    items: list[ReviewItem] = []
+    for path in sorted(Path(chunks_dir).glob("human-review-*.jsonl")):
+        for record in load_jsonl_records(path):
+            items.append(ReviewItem(**record))
+    return items
+
+
+def _run_path_order_key(path: str | Path) -> str:
+    return str(Path(path).absolute()).replace("\\", "/").casefold()
 
 
 def _append_jsonl_records(records: list[dict], path: str | Path) -> None:

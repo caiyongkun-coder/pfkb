@@ -184,8 +184,8 @@ class Inventory:
         where = ["exists_now = 1"]
         params: dict[str, object] = {"limit": limit}
         if after_path:
-            where.append("path > :after_path")
-            params["after_path"] = str(after_path)
+            where.append("lower(normalized_path) > :after_path")
+            params["after_path"] = _path_order_key(after_path)
         if access_policy:
             where.append("access_policy = :access_policy")
             params["access_policy"] = access_policy
@@ -195,7 +195,7 @@ class Inventory:
             SELECT *
             FROM files
             WHERE {' AND '.join(where)}
-            ORDER BY path ASC
+            ORDER BY lower(normalized_path) ASC, path ASC
             LIMIT :limit
         """
         rows = self.connection.execute(sql, params).fetchall()
@@ -387,3 +387,7 @@ def _extract_row_to_dict(row: sqlite3.Row) -> dict:
         if key in data and data[key] is not None:
             data[key] = bool(data[key])
     return data
+
+
+def _path_order_key(path: str | Path) -> str:
+    return str(Path(path).absolute()).replace("\\", "/").casefold()

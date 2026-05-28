@@ -90,7 +90,7 @@ data/runs/<run-id>/run-state.json
 - 本次扫描的 root 列表。
 - 已完成目录或游标。
 - 本次最大文件数、最大耗时、最大读取字节数。
-- 当前阶段：scan、extract、analyze、review、done。
+- 当前阶段：scan、extract、analyze、review、assets、html、done。
 - 上次中断原因。
 - 下次继续的位置。
 

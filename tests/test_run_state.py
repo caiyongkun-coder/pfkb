@@ -88,8 +88,11 @@ def test_run_command_progresses_to_complete_with_small_limits(tmp_path):
     assert (out_dir / "analyze" / "analysis-manifest.jsonl").exists()
     assert (out_dir / "analyze" / "knowledge-index.jsonl").exists()
     assert (out_dir / "review" / "human-review.html").exists()
+    assert (out_dir / "assets" / "asset-index.jsonl").exists()
+    assert (out_dir / "assets" / "asset-index.md").exists()
     assert (out_dir / "html" / "knowledge-index.html").exists()
     assert len((out_dir / "analyze" / "analysis-manifest.jsonl").read_text(encoding="utf-8").splitlines()) == 2
+    assert "assets" in state["stages"]
     with Inventory(out_dir / "inventory.sqlite") as inventory:
         assert len(inventory.list_files(limit=10)) == 4
 
@@ -188,6 +191,67 @@ def test_run_stage_argument_runs_named_stage_from_existing_state_without_roots(t
     assert payload["state"]["roots"] == [str(source)]
     assert payload["state"]["stages"]["scan"]["status"] == "complete"
     assert payload["state"]["stages"]["scan"]["chunks"] == 2
+
+
+def test_run_review_stage_paginates_files(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    for name in ["a.txt", "b.txt", "c.txt"]:
+        (source / name).write_text(name, encoding="utf-8")
+    out_dir = tmp_path / "run"
+    privacy, excludes = _write_allow_configs(tmp_path, source)
+
+    code, stdout, stderr = _run_cli(
+        [
+            "run",
+            str(source),
+            "--out",
+            str(out_dir),
+            "--privacy",
+            str(privacy),
+            "--excludes",
+            str(excludes),
+            "--max-scan-entries",
+            "20",
+        ]
+    )
+    assert code == 0, stderr
+    assert "current_stage: extract" in stdout
+
+    state_path = out_dir / "run-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["stages"]["extract"]["status"] = "complete"
+    state["stages"]["analyze"]["status"] = "complete"
+    state["current_stage"] = "review"
+    state["status"] = "paused"
+    save_run_state(state, state_path)
+
+    code, stdout, stderr = _run_cli(
+        ["run", "--out", str(out_dir), "--stage", "review", "--review-limit", "2", "--json"]
+    )
+
+    assert code == 0, stderr
+    payload = json.loads(stdout)
+    assert payload["result"]["status"] == "paused"
+    assert payload["state"]["current_stage"] == "review"
+    assert payload["state"]["stages"]["review"]["chunks"] == 1
+    assert payload["state"]["stages"]["review"]["totals"]["files_inspected"] == 2
+    assert (out_dir / "review" / "chunks" / "human-review-0001.jsonl").exists()
+    assert len((out_dir / "review" / "human-review.jsonl").read_text(encoding="utf-8").splitlines()) == 2
+
+    code, stdout, stderr = _run_cli(
+        ["run", "--out", str(out_dir), "--stage", "review", "--review-limit", "2", "--json"]
+    )
+
+    assert code == 0, stderr
+    payload = json.loads(stdout)
+    assert payload["result"]["status"] == "complete"
+    assert payload["state"]["current_stage"] == "assets"
+    assert payload["state"]["stages"]["review"]["chunks"] == 2
+    assert payload["state"]["stages"]["review"]["totals"]["files_inspected"] == 3
+    assert payload["state"]["stages"]["review"]["totals"]["review_items"] == 3
+    assert (out_dir / "review" / "chunks" / "human-review-0002.jsonl").exists()
+    assert len((out_dir / "review" / "human-review.jsonl").read_text(encoding="utf-8").splitlines()) == 3
 
 
 def test_run_html_stage_infers_asset_index_for_legacy_state(tmp_path):

@@ -385,9 +385,22 @@ def summarize_text(text: str, *, title: str = "") -> str:
     ]
     if not paragraphs:
         return ""
-    summary = paragraphs[0]
+    summary_index = 0
+    summary = paragraphs[summary_index]
     if title and summary.lower() == title.lower() and len(paragraphs) > 1:
-        summary = paragraphs[1]
+        summary_index = 1
+        summary = paragraphs[summary_index]
+    if _needs_summary_followup(summary) and len(paragraphs) > 1:
+        summary_parts = [summary]
+        for paragraph in paragraphs[summary_index + 1 :]:
+            if title and paragraph.lower() == title.lower():
+                continue
+            if _is_markdown_table_block(paragraph):
+                continue
+            summary_parts.append(paragraph)
+            if len(" ".join(summary_parts)) >= SUMMARY_MAX_CHARS:
+                break
+        summary = " ".join(summary_parts)
     return _truncate(summary, SUMMARY_MAX_CHARS)
 
 
@@ -670,6 +683,24 @@ def _clean_inline(text: str) -> str:
 
 def _clean_paragraph(text: str) -> str:
     return _clean_inline(re.sub(r"^#{1,6}\s+", "", text.strip()))
+
+
+def _needs_summary_followup(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.endswith((":", "：")):
+        return True
+    return bool(re.search(r"(如下|以下|包括|包含|清单|问题)[：:]?$", stripped))
+
+
+def _is_markdown_table_block(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.startswith("|") and stripped.count("|") >= 4:
+        return True
+    return all(char in "|:- " for char in stripped)
 
 
 def _truncate(text: str, max_chars: int) -> str:
