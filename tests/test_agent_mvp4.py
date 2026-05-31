@@ -66,6 +66,9 @@ def test_agent_init_creates_agent_readable_configs_without_overwriting(tmp_path)
     profile_payload = yaml.safe_load(profile.read_text(encoding="utf-8"))
     assert profile_payload["safety"]["allow_delete"] is False
     assert profile_payload["indexes"]["asset_index"].endswith("asset-index.jsonl")
+    assert profile_payload["analysis"]["mode"] == "rules"
+    assert profile_payload["analysis"]["semantic_scope"] == "review_only"
+    assert payload["analysis"]["mode"] == "rules"
 
     original = profile.read_text(encoding="utf-8")
     code, stdout, stderr = _run_cli(["agent-init", "--profile", str(profile), "--out", str(run_dir), "--json"])
@@ -74,6 +77,34 @@ def test_agent_init_creates_agent_readable_configs_without_overwriting(tmp_path)
     payload = json.loads(stdout)
     assert payload["profile"]["status"] == "exists"
     assert profile.read_text(encoding="utf-8") == original
+
+
+def test_agent_init_can_choose_agent_llm_index_understanding_mode(tmp_path):
+    profile = tmp_path / "configs" / "agent-profile.yaml"
+    run_dir = tmp_path / "data" / "daily-run"
+
+    code, stdout, stderr = _run_cli(
+        [
+            "agent-init",
+            "--profile",
+            str(profile),
+            "--out",
+            str(run_dir),
+            "--analysis-mode",
+            "agent-llm",
+            "--semantic-scope",
+            "all_extractable",
+            "--json",
+        ]
+    )
+
+    assert code == 0, stderr
+    payload = json.loads(stdout)
+    profile_payload = yaml.safe_load(profile.read_text(encoding="utf-8"))
+    assert profile_payload["analysis"]["mode"] == "agent-llm"
+    assert profile_payload["analysis"]["semantic_scope"] == "all_extractable"
+    assert "不需要额外 API key" in profile_payload["analysis"]["mode_notes"]["agent-llm"]
+    assert payload["analysis"]["mode"] == "agent-llm"
 
 
 def test_query_searches_asset_sidecars_without_reading_original_files(tmp_path):
@@ -271,6 +302,222 @@ def test_agent_task_builds_privacy_gated_semantic_review_tasks(tmp_path):
     assert tasks[0]["expected_output_schema"]["required"]
     skipped = (run_dir / "agent-review" / "semantic-review-skipped.jsonl").read_text(encoding="utf-8")
     assert "blocked review category" in skipped
+
+
+def test_agent_task_semantic_index_all_extractable_without_review_actions(tmp_path):
+    run_dir = tmp_path / "run"
+    function_file = tmp_path / "docs" / "函数：FUNC_GET_CURVE_MIDVAL.md"
+    private_file = tmp_path / "private" / "secret.md"
+    denied_file = tmp_path / "private" / "denied.md"
+    extracted = run_dir / "extract" / "FUNC_GET_CURVE_MIDVAL.md.txt"
+    private_extracted = run_dir / "extract" / "secret.md.txt"
+    denied_extracted = run_dir / "extract" / "denied.md.txt"
+    for path in (function_file, private_file, denied_file):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture", encoding="utf-8")
+    for path in (extracted, private_extracted, denied_extracted):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture extracted text", encoding="utf-8")
+    asset_id = asset_id_for_path(str(function_file))
+    _write_jsonl(
+        run_dir / "analyze" / "analysis-manifest.jsonl",
+        [
+            {
+                "path": str(function_file),
+                "output_path": str(extracted),
+                "status": "ok",
+                "title": "函数：FUNC_GET_CURVE_MIDVAL.md",
+                "summary": "函数开头定义了 FUNC_GET_CURVE_MIDVAL。",
+                "tags": ["document", "docs"],
+                "primary_tag": "document",
+                "content_type": "document",
+                "extension": ".md",
+                "parser": "direct_text",
+                "embedding_allowed": True,
+                "access_policy": "allow",
+                "char_count": 240,
+                "word_count": 40,
+                "line_count": 8,
+                "analyzed_at": "2026-05-29T00:00:00+00:00",
+                "source_extract_status": "ok",
+                "analysis_method": "rules",
+                "confidence": 0.7,
+                "needs_human_review": False,
+                "review_reason": "rules_only_optional_review",
+                "rule_title": "函数：FUNC_GET_CURVE_MIDVAL.md",
+                "rule_summary": "函数开头定义了 FUNC_GET_CURVE_MIDVAL。",
+                "rule_tags": ["document", "docs"],
+            },
+            {
+                "path": str(private_file),
+                "output_path": str(private_extracted),
+                "status": "ok",
+                "title": "secret.md",
+                "summary": "metadata only fixture",
+                "tags": ["document"],
+                "primary_tag": "document",
+                "content_type": "document",
+                "extension": ".md",
+                "parser": "direct_text",
+                "embedding_allowed": False,
+                "access_policy": "metadata_only",
+                "char_count": 10,
+                "word_count": 2,
+                "line_count": 1,
+                "analyzed_at": "2026-05-29T00:00:00+00:00",
+                "source_extract_status": "ok",
+                "analysis_method": "rules",
+                "confidence": 0.2,
+                "needs_human_review": True,
+                "review_reason": "metadata_only",
+            },
+            {
+                "path": str(denied_file),
+                "output_path": str(denied_extracted),
+                "status": "ok",
+                "title": "denied.md",
+                "summary": "deny fixture",
+                "tags": ["document"],
+                "primary_tag": "document",
+                "content_type": "document",
+                "extension": ".md",
+                "parser": "direct_text",
+                "embedding_allowed": False,
+                "access_policy": "deny",
+                "char_count": 10,
+                "word_count": 2,
+                "line_count": 1,
+                "analyzed_at": "2026-05-29T00:00:00+00:00",
+                "source_extract_status": "ok",
+                "analysis_method": "rules",
+                "confidence": 0.2,
+                "needs_human_review": True,
+                "review_reason": "policy_blocked",
+            },
+        ],
+    )
+
+    code, stdout, stderr = _run_cli(
+        [
+            "agent-task",
+            "--kind",
+            "semantic-index",
+            "--scope",
+            "all-extractable",
+            "--analysis",
+            str(run_dir / "analyze" / "analysis-manifest.jsonl"),
+            "--out",
+            str(run_dir / "agent-review"),
+            "--json",
+        ]
+    )
+
+    assert code == 0, stderr
+    payload = json.loads(stdout)
+    assert payload["kind"] == "semantic-index"
+    assert payload["stats"]["tasks"] == 1
+    assert payload["stats"]["skipped"] == 2
+    tasks = [json.loads(line) for line in (run_dir / "agent-review" / "semantic-index-tasks.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert tasks[0]["asset_id"] == asset_id
+    assert tasks[0]["path"] == str(function_file)
+    assert tasks[0]["extracted_text_path"] == str(extracted)
+    assert tasks[0]["privacy_context"]["must_not_read_original"] is True
+    skipped = (run_dir / "agent-review" / "semantic-index-skipped.jsonl").read_text(encoding="utf-8")
+    assert "blocked access policy: metadata_only" in skipped
+    assert "blocked access policy: deny" in skipped
+
+    _write_jsonl(
+        run_dir / "agent-review" / "results.jsonl",
+        [
+            {
+                "asset_id": asset_id,
+                "path": str(function_file),
+                "title": "函数：FUNC_GET_CURVE_MIDVAL",
+                "summary": "这个函数用于根据指定日期、曲线、币种和期限，计算收益率曲线中的中间期限利率值。",
+                "tags": ["document", "docs"],
+                "confidence": 0.86,
+                "needs_human_review": False,
+                "review_reason": "agent_llm_semantic_reviewed",
+                "key_points": ["收益率曲线", "中间期限", "利率计算"],
+                "model_notes": "Host agent read extracted text only.",
+            }
+        ],
+    )
+
+    code, stdout, stderr = _run_cli(["agent-review-apply", "--in", str(run_dir / "agent-review" / "results.jsonl"), "--json"])
+
+    assert code == 0, stderr
+    manifest = [json.loads(line) for line in (run_dir / "analyze" / "analysis-manifest.jsonl").read_text(encoding="utf-8").splitlines()]
+    by_path = {record["path"]: record for record in manifest}
+    assert by_path[str(function_file)]["analysis_method"] == "agent-llm"
+    assert by_path[str(function_file)]["summary"] == "这个函数用于根据指定日期、曲线、币种和期限，计算收益率曲线中的中间期限利率值。"
+    assert by_path[str(function_file)]["rule_summary"] == "函数开头定义了 FUNC_GET_CURVE_MIDVAL。"
+    asset = json.loads((run_dir / "assets" / "asset-index.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert asset["analysis_method"] == "agent-llm"
+    assert asset["summary"] == "这个函数用于根据指定日期、曲线、币种和期限，计算收益率曲线中的中间期限利率值。"
+    assert (run_dir / "html" / "knowledge-index.html").exists()
+
+
+def test_agent_task_semantic_index_cloud_mode_requires_explicit_llm_authorization(tmp_path):
+    run_dir = tmp_path / "run"
+    source = tmp_path / "docs" / "cloud-candidate.md"
+    extracted = run_dir / "extract" / "cloud-candidate.md.txt"
+    source.parent.mkdir(parents=True)
+    source.write_text("fixture", encoding="utf-8")
+    extracted.parent.mkdir(parents=True)
+    extracted.write_text("fixture extracted text", encoding="utf-8")
+    _write_jsonl(
+        run_dir / "analyze" / "analysis-manifest.jsonl",
+        [
+            {
+                "path": str(source),
+                "output_path": str(extracted),
+                "status": "ok",
+                "title": "cloud-candidate.md",
+                "summary": "fixture",
+                "tags": ["document"],
+                "primary_tag": "document",
+                "content_type": "document",
+                "extension": ".md",
+                "parser": "direct_text",
+                "embedding_allowed": True,
+                "access_policy": "allow",
+                "char_count": 10,
+                "word_count": 2,
+                "line_count": 1,
+                "analyzed_at": "2026-05-29T00:00:00+00:00",
+                "source_extract_status": "ok",
+                "analysis_method": "rules",
+                "confidence": 0.6,
+                "needs_human_review": False,
+                "review_reason": "rules_only_optional_review",
+            }
+        ],
+    )
+
+    code, stdout, stderr = _run_cli(
+        [
+            "agent-task",
+            "--kind",
+            "semantic-index",
+            "--scope",
+            "all-extractable",
+            "--mode",
+            "cloud-llm",
+            "--analysis",
+            str(run_dir / "analyze" / "analysis-manifest.jsonl"),
+            "--out",
+            str(run_dir / "agent-review"),
+            "--json",
+        ]
+    )
+
+    assert code == 0, stderr
+    payload = json.loads(stdout)
+    assert payload["stats"]["tasks"] == 0
+    assert payload["stats"]["skipped"] == 1
+    skipped = (run_dir / "agent-review" / "semantic-index-skipped.jsonl").read_text(encoding="utf-8")
+    assert "cloud_not_authorized" in skipped
 
 
 def test_agent_review_apply_refreshes_analysis_assets_and_html(tmp_path):

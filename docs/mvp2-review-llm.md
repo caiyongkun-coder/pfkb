@@ -79,23 +79,29 @@ anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/fir
 
 如果云端文件缺少原始隐私策略上下文，或没有位于授权目录内，分析结果会写成 `status: skipped`，不会调用 API。
 
-## 宿主 Agent 语义复核
+## 宿主 Agent 语义索引与复核
 
-在 Codex、OpenClaw、Hermes 这类宿主 agent 中，推荐优先使用 `agent-llm` / `agent-review` 流程，而不是让 AnyFile Wiki 再配置一套云端 API key。
+在 Codex、OpenClaw、Hermes 这类宿主 agent 中，推荐优先使用 `agent-llm` 工作流，而不是让 AnyFile Wiki 再配置一套云端 API key。
 
 分工是：
 
-- AnyFile Wiki：执行隐私门控、扫描、提取文本、生成待复核任务、校验写回结果。
+- AnyFile Wiki：执行隐私门控、扫描、提取文本、生成语义索引/复核任务、校验写回结果。
 - 宿主 agent：读取已提取文本，理解内容，生成结构化标题、摘要、标签、置信度和复核状态。
 - 用户：只需要确认隐私配置和人工复核决定，不需要重复配置宿主模型的 API key。
 
-生成任务：
+对所有已成功提取、隐私允许的文本做语义增强：
+
+```powershell
+anyfile-wiki agent-task --kind semantic-index --scope all-extractable --out data/daily-run/agent-review
+```
+
+只处理人工复核页里排队的项目：
 
 ```powershell
 anyfile-wiki agent-task --kind semantic-review --in data/daily-run/review/next-actions.jsonl --out data/daily-run/agent-review
 ```
 
-任务只会指向已经存在的 `extracted_text_path`。`deny`、`metadata_only`、缺少提取文本、或被策略挡住的文件会写入 `semantic-review-skipped.jsonl`，不会进入 agent 可读任务。
+任务只会指向已经存在的 `extracted_text_path`。`deny`、`metadata_only`、缺少提取文本、或被策略挡住的文件会写入 `semantic-index-skipped.jsonl` / `semantic-review-skipped.jsonl`，不会进入 agent 可读任务。
 
 宿主 agent 写回 `results.jsonl` 后：
 
@@ -107,7 +113,10 @@ CLI 会校验 schema，并刷新 `analysis-manifest.jsonl`、`knowledge-index.js
 
 ```text
 analysis_method: agent-llm
+model_notes: Host agent read extracted text only.
 ```
+
+写回后当前 `title`、`summary`、`tags` 使用宿主 agent 语义结果，原来的 `rule_title`、`rule_summary`、`rule_tags` 仍会保留，用于审计、对比和回滚。
 
 `cloud-llm` 继续保留给独立 CLI、无人值守后台或定时任务；这种模式仍然要求 `configs/llm.yaml`、API key、`allowed_paths` 和 `risk_acknowledged`。
 

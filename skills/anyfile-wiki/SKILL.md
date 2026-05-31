@@ -29,9 +29,14 @@ Use this skill when the user asks about local file knowledge, personal-file inve
    - `configs/privacy.yaml`
    - `configs/roots.yaml`
    - `configs/schedule.yaml`
-5. Read `setup_questions` from privacy/roots config and ask the user about sensitive paths, first scan roots, and metadata-only folders.
-6. Update `privacy.yaml` / `roots.yaml` only after the user answers.
-7. Run a dry-run scan and explain the report before the first extraction or analysis run.
+5. Read `setup_questions` from privacy/roots/analysis config and ask the user about sensitive paths, first scan roots, metadata-only folders, and index understanding mode.
+6. For `analysis.mode`, explain the choices:
+   - `rules`: local, fast, no model, rough summaries.
+   - `agent-llm`: host agent reads extracted text and writes back better summaries; no extra API key.
+   - `local-llm`: local model service such as Ollama or LM Studio.
+   - `cloud-llm`: cloud API, only after explicit allowed paths and risk acknowledgement.
+7. Update `privacy.yaml` / `roots.yaml` / `agent-profile.yaml` only after the user answers.
+8. Run a dry-run scan and explain the report before the first extraction or analysis run.
 
 ## Daily Run Workflow
 
@@ -61,9 +66,17 @@ anyfile-wiki review-server --review-dir data/daily-run/review --once
 
 Use static `human-review.html` only as a fallback. Pause for review before treating uncertain files as confirmed.
 
-## Agent Semantic Review Workflow
+## Agent Semantic Index And Review Workflow
 
-When a user approves semantic review inside the host agent, do not configure `OPENAI_API_KEY` for AnyFile Wiki. Generate privacy-gated tasks:
+When the user chooses host-agent semantic understanding, do not configure `OPENAI_API_KEY` for AnyFile Wiki. AnyFile Wiki handles privacy gating and task/writeback files; the host agent performs semantic reading.
+
+For full semantic indexing of all successfully extracted, privacy-allowed text:
+
+```powershell
+anyfile-wiki agent-task --kind semantic-index --scope all-extractable --out data/daily-run/agent-review
+```
+
+For review-page decisions such as `queue_local_llm_review`, use:
 
 ```powershell
 anyfile-wiki agent-task --kind semantic-review --in data/daily-run/review/next-actions.jsonl --out data/daily-run/agent-review
@@ -71,7 +84,7 @@ anyfile-wiki agent-task --kind semantic-review --in data/daily-run/review/next-a
 
 Then:
 
-1. Read `data/daily-run/agent-review/semantic-review-tasks.jsonl`.
+1. Read `semantic-index-tasks.jsonl` or `semantic-review-tasks.jsonl` in `data/daily-run/agent-review`.
 2. For each task, read only `extracted_text_path`.
 3. Do not read the original `path` unless the user explicitly asks and privacy allows it.
 4. Produce `data/daily-run/agent-review/results.jsonl` matching `expected-output-schema.json`.
@@ -114,7 +127,8 @@ Use `selected`, `opened`, `cited`, or `search_hit` as the event type.
 - Show progress: run `anyfile-wiki run --out data/daily-run --status`.
 - Open asset browser: point to `data/daily-run/html/knowledge-index.html`.
 - Open review page: start `review-server`; point to `data/daily-run/review/human-review.html` only if service mode is not available.
-- Run host-agent semantic review: run `agent-task`, analyze extracted text, then run `agent-review-apply`.
+- Improve all extracted summaries with host-agent understanding: run `agent-task --kind semantic-index --scope all-extractable`, analyze extracted text, then run `agent-review-apply`.
+- Run review-only host-agent semantic review: run `agent-task --kind semantic-review`, analyze extracted text, then run `agent-review-apply`.
 - Find a file/type/topic: run `query`, then cite paths and virtual paths.
 - Find review items: query `waiting review`, `needs review`, or inspect `human-review.jsonl`.
 - Find duplicates/archive candidates: query `duplicate_candidate`, `nas`, `cold`, or inspect `asset-score.jsonl`.

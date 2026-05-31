@@ -16,7 +16,13 @@ AGENT_PROFILE_VERSION = 1
 USAGE_EVENT_TYPES = {"selected", "opened", "cited", "search_hit"}
 
 
-def default_agent_profile(*, profile_path: str | Path, out_dir: str | Path) -> dict[str, Any]:
+def default_agent_profile(
+    *,
+    profile_path: str | Path,
+    out_dir: str | Path,
+    analysis_mode: str = "rules",
+    semantic_scope: str = "review_only",
+) -> dict[str, Any]:
     profile = Path(profile_path)
     run_dir = Path(out_dir)
     return {
@@ -62,6 +68,23 @@ def default_agent_profile(*, profile_path: str | Path, out_dir: str | Path) -> d
             "html_path": _posix(run_dir / "review" / "human-review.html"),
             "decisions_path": _posix(run_dir / "review" / "review-decisions.jsonl"),
         },
+        "analysis": {
+            "mode": analysis_mode,
+            "semantic_scope": semantic_scope,
+            "max_chars_per_file": 24_000,
+            "require_human_confirmation_for_cloud": True,
+            "setup_questions": [
+                "你希望索引摘要如何生成：rules、agent-llm、local-llm 还是 cloud-llm？",
+                "agent-llm 是否只处理待复核文件，还是增强所有已成功提取且隐私允许的文本？",
+                "如果选择 cloud-llm，哪些目录明确允许发送正文到云端，并且是否已确认风险？",
+            ],
+            "mode_notes": {
+                "rules": "快速、本地、无模型，摘要较粗。",
+                "agent-llm": "宿主 agent 读取已提取文本并写回语义摘要，不需要额外 API key。",
+                "local-llm": "使用本机 Ollama、LM Studio 等模型服务。",
+                "cloud-llm": "发送显式授权目录下的正文到云端模型，必须配置 allowed_paths 和 risk_acknowledged。",
+            },
+        },
         "schedule": {
             "enabled": False,
             "mode": "manual",
@@ -94,6 +117,8 @@ def initialize_agent_workspace(
     roots_config: str | Path | None = None,
     privacy_config: str | Path | None = None,
     schedule_config: str | Path | None = None,
+    analysis_mode: str = "rules",
+    semantic_scope: str = "review_only",
 ) -> dict[str, Any]:
     profile = Path(profile_path)
     config_dir = profile.parent
@@ -113,17 +138,25 @@ def initialize_agent_workspace(
         name: _copy_template_if_missing(source=templates[name], target=target)
         for name, target in targets.items()
     }
-    profile_result = _write_profile_if_missing(profile, default_agent_profile(profile_path=profile, out_dir=run_dir))
+    profile_payload = default_agent_profile(
+        profile_path=profile,
+        out_dir=run_dir,
+        analysis_mode=analysis_mode,
+        semantic_scope=semantic_scope,
+    )
+    profile_result = _write_profile_if_missing(profile, profile_payload)
     return {
         "profile": profile_result,
         "configs": config_results,
         "run_dir": _posix(run_dir),
         "run_state": _posix(run_dir / "run-state.json"),
-        "indexes": default_agent_profile(profile_path=profile, out_dir=run_dir)["indexes"],
-        "review": default_agent_profile(profile_path=profile, out_dir=run_dir)["review"],
+        "indexes": profile_payload["indexes"],
+        "review": profile_payload["review"],
+        "analysis": profile_payload["analysis"],
         "next_commands": [
             f'anyfile-wiki run "<scan-root>" --privacy "{_posix(targets["privacy"])}" --out "{_posix(run_dir)}"',
             f'anyfile-wiki run --out "{_posix(run_dir)}"',
+            f'anyfile-wiki agent-task --kind semantic-index --scope {semantic_scope.replace("_", "-")} --out "{_posix(run_dir / "agent-review")}"',
             f'anyfile-wiki query "<keyword>" --profile "{_posix(profile)}" --json',
         ],
     }
@@ -251,6 +284,12 @@ def format_agent_init_summary(summary: dict[str, Any]) -> str:
     lines.append("review:")
     for name, path in summary["review"].items():
         lines.append(f"- {name}: {path}")
+    analysis = summary.get("analysis") or {}
+    if analysis:
+        lines.append("analysis:")
+        lines.append(f"- mode: {analysis.get('mode')}")
+        lines.append(f"- semantic_scope: {analysis.get('semantic_scope')}")
+        lines.append(f"- max_chars_per_file: {analysis.get('max_chars_per_file')}")
     lines.append("next_commands:")
     lines.extend(f"- {command}" for command in summary["next_commands"])
     return "\n".join(lines)

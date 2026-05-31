@@ -8,6 +8,7 @@ import json
 
 from .analyze import AnalysisResult, write_analysis_outputs
 from .assets import load_jsonl_records, write_asset_outputs_from_files
+from .llm_config import cloud_allowed_for_path, load_llm_config
 from .sidecars import asset_id_for_path
 from .tags import load_tags_config, tag_definitions
 
@@ -15,6 +16,10 @@ from .tags import load_tags_config, tag_definitions
 TASK_SCHEMA_VERSION = 1
 AGENT_REVIEW_METHOD = "agent-llm"
 TASK_KIND_SEMANTIC_REVIEW = "semantic-review"
+TASK_KIND_SEMANTIC_INDEX = "semantic-index"
+SEMANTIC_INDEX_SCOPES = {"review_only", "all_extractable", "selected_roots"}
+SEMANTIC_TASK_MODES = {"agent-llm", "cloud-llm"}
+ELIGIBLE_EXTRACT_STATUSES = {"ok", "up_to_date"}
 
 SEMANTIC_REVIEW_ACTIONS = {
     "queue_local_llm_review",
@@ -23,6 +28,103 @@ SEMANTIC_REVIEW_ACTIONS = {
 BLOCKED_REVIEW_CATEGORIES = {"policy_blocked", "metadata_only"}
 BLOCKED_ACCESS_POLICIES = {"deny", "metadata_only"}
 REQUIRED_RESULT_FIELDS = {"asset_id", "path", "title", "summary", "tags", "confidence"}
+
+
+def build_semantic_index_tasks(
+    *,
+    output_dir: str | Path,
+    analysis_path: str | Path | None = None,
+    extract_manifest_path: str | Path | None = None,
+    scope: str = "review_only",
+    mode: str = "agent-llm",
+    selected_roots: Iterable[str | Path] = (),
+    llm_config_path: str | Path | None = "configs/llm.example.yaml",
+    tags_config_path: str | Path | None = "configs/tags.example.yaml",
+) -> dict[str, Any]:
+    """Create semantic indexing tasks directly from extracted/analyzed records.
+
+    Unlike semantic-review, this does not depend on human review actions. It is
+    the host-agent path for enriching all extracted, privacy-allowed text.
+    """
+
+    normalized_scope = _normalize_scope(scope)
+    if normalized_scope not in SEMANTIC_INDEX_SCOPES:
+        raise ValueError(f"unsupported semantic index scope: {scope}")
+    if mode not in SEMANTIC_TASK_MODES:
+        raise ValueError(f"unsupported semantic task mode: {mode}")
+
+    root = Path(output_dir)
+    run_root = _infer_run_root_from_agent_review_path(root / "results.jsonl")
+    analysis_source = Path(analysis_path) if analysis_path else _default_analysis_path(run_root)
+    extract_source = Path(extract_manifest_path) if extract_manifest_path else run_root / "extract" / "extract-manifest.jsonl"
+    allowed_tags = _allowed_tags(tags_config_path)
+    llm_config = _load_tagsafe_llm_config(llm_config_path) if mode == "cloud-llm" else None
+
+    source_kind = "analysis" if analysis_source.exists() else "extract"
+    source_path = analysis_source if analysis_source.exists() else extract_source
+    source_records = load_jsonl_records(source_path) if source_path.exists() else []
+    selected_root_values = [str(root_value) for root_value in selected_roots if str(root_value).strip()]
+
+    tasks: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    seen_task_ids: set[str] = set()
+    for record in source_records:
+        normalized = _normalize_semantic_source_record(record, source_kind=source_kind)
+        asset_id = asset_id_for_path(normalized["path"])
+        skip_reason = _semantic_index_skip_reason(
+            normalized,
+            scope=normalized_scope,
+            mode=mode,
+            selected_roots=selected_root_values,
+            llm_config=llm_config,
+        )
+        if skip_reason:
+            skipped.append(
+                {
+                    "schema_version": TASK_SCHEMA_VERSION,
+                    "kind": TASK_KIND_SEMANTIC_INDEX,
+                    "asset_id": asset_id,
+                    "path": normalized["path"],
+                    "skip_reason": skip_reason,
+                }
+            )
+            continue
+        task_id = f"{TASK_KIND_SEMANTIC_INDEX}:{asset_id}"
+        if task_id in seen_task_ids:
+            continue
+        seen_task_ids.add(task_id)
+        tasks.append(_semantic_task_record(normalized, asset_id=asset_id, task_id=task_id, kind=TASK_KIND_SEMANTIC_INDEX, mode=mode, allowed_tags=allowed_tags))
+
+    outputs = {
+        "semantic_index_tasks": root / "semantic-index-tasks.jsonl",
+        "semantic_index_skipped": root / "semantic-index-skipped.jsonl",
+        "expected_output_schema": root / "expected-output-schema.json",
+        "instructions": root / "semantic-index-instructions.md",
+    }
+    root.mkdir(parents=True, exist_ok=True)
+    _write_jsonl(tasks, outputs["semantic_index_tasks"])
+    _write_jsonl(skipped, outputs["semantic_index_skipped"])
+    outputs["expected_output_schema"].write_text(
+        json.dumps(expected_result_schema(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    _write_task_instructions(outputs["instructions"], tasks_path=outputs["semantic_index_tasks"], kind=TASK_KIND_SEMANTIC_INDEX)
+    return {
+        "ok": True,
+        "kind": TASK_KIND_SEMANTIC_INDEX,
+        "mode": mode,
+        "scope": normalized_scope,
+        "inputs": {
+            "source_kind": source_kind,
+            "source": str(source_path),
+        },
+        "outputs": {key: str(value) for key, value in outputs.items()},
+        "stats": {
+            "source_records": len(source_records),
+            "tasks": len(tasks),
+            "skipped": len(skipped),
+        },
+    }
 
 
 def build_semantic_review_tasks(
@@ -73,27 +175,19 @@ def build_semantic_review_tasks(
             continue
         seen_task_ids.add(task_id)
         tasks.append(
-            {
-                "schema_version": TASK_SCHEMA_VERSION,
-                "task_id": task_id,
-                "kind": TASK_KIND_SEMANTIC_REVIEW,
-                "asset_id": asset_id,
-                "path": path,
-                "extracted_text_path": extracted_text_path,
-                "source_action": str(action.get("action") or ""),
-                "source_decision": str(action.get("source_decision") or ""),
-                "current_title": str(analysis.get("title") or ""),
-                "current_summary": str(analysis.get("summary") or ""),
-                "current_tags": _string_list(analysis.get("tags")),
-                "current_confidence": _optional_float(analysis.get("confidence"), default=0.0),
-                "current_review_reason": str(analysis.get("review_reason") or ""),
-                "content_type": str(analysis.get("content_type") or ""),
-                "extension": str(analysis.get("extension") or Path(path).suffix.lower()),
-                "parser": str(analysis.get("parser") or ""),
-                "allowed_tags": allowed_tags,
-                "expected_output_schema": expected_result_schema(),
-                "privacy_context": _privacy_context(action, review_item, analysis),
-            }
+            _semantic_task_record(
+                _normalize_semantic_source_record({**analysis, "path": path}, source_kind="analysis"),
+                asset_id=asset_id,
+                task_id=task_id,
+                kind=TASK_KIND_SEMANTIC_REVIEW,
+                mode="agent-llm",
+                allowed_tags=allowed_tags,
+                extra={
+                    "source_action": str(action.get("action") or ""),
+                    "source_decision": str(action.get("source_decision") or ""),
+                    "privacy_context": _privacy_context(action, review_item, analysis),
+                },
+            )
         )
 
     outputs = {
@@ -109,7 +203,7 @@ def build_semantic_review_tasks(
         json.dumps(expected_result_schema(), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    _write_task_instructions(outputs["instructions"], tasks_path=outputs["semantic_review_tasks"])
+    _write_task_instructions(outputs["instructions"], tasks_path=outputs["semantic_review_tasks"], kind=TASK_KIND_SEMANTIC_REVIEW)
     return {
         "ok": True,
         "kind": TASK_KIND_SEMANTIC_REVIEW,
@@ -143,7 +237,7 @@ def apply_semantic_review_results(
     inferred_run_root = Path(run_dir) if run_dir else _infer_run_root_from_agent_review_path(source)
     agent_review_dir = source.parent
     analysis_source = Path(analysis_path) if analysis_path else _default_analysis_path(inferred_run_root)
-    task_source = Path(tasks_path) if tasks_path else agent_review_dir / "semantic-review-tasks.jsonl"
+    task_source = Path(tasks_path) if tasks_path else _default_task_path(agent_review_dir)
     action_source = Path(actions_path) if actions_path else inferred_run_root / "review" / "next-actions.jsonl"
     review_source = Path(review_items_path) if review_items_path else inferred_run_root / "review" / "human-review.jsonl"
 
@@ -189,16 +283,15 @@ def apply_semantic_review_results(
 
     asset_outputs: dict[str, Path] = {}
     knowledge_index = outputs["knowledge_index_jsonl"]
-    if action_source.exists():
-        tags_config = _load_tags_config_if_present(tags_config_path)
-        asset_outputs = write_asset_outputs_from_files(
-            analysis_path=knowledge_index,
-            actions_path=effective_actions_path,
-            review_items_path=review_source if review_source.exists() else None,
-            output_dir=inferred_run_root / "assets",
-            html_dir=inferred_run_root / "html",
-            tags_config=tags_config,
-        )
+    tags_config = _load_tags_config_if_present(tags_config_path)
+    asset_outputs = write_asset_outputs_from_files(
+        analysis_path=knowledge_index,
+        actions_path=effective_actions_path,
+        review_items_path=review_source if review_source.exists() else None,
+        output_dir=inferred_run_root / "assets",
+        html_dir=inferred_run_root / "html",
+        tags_config=tags_config,
+    )
 
     return {
         "ok": not rejected,
@@ -222,7 +315,7 @@ def expected_result_schema() -> dict[str, Any]:
         "schema_version": 1,
         "required": sorted(REQUIRED_RESULT_FIELDS),
         "fields": {
-            "asset_id": "asset id from semantic-review-tasks.jsonl",
+            "asset_id": "asset id from semantic task JSONL",
             "path": "original file path from the task",
             "title": "short human-readable title",
             "summary": "Chinese summary, 1-3 sentences",
@@ -246,9 +339,112 @@ def expected_result_schema() -> dict[str, Any]:
             "needs_human_review": False,
             "review_reason": "agent_llm_semantic_reviewed",
             "key_points": ["预算口径", "数据来源", "核对流程"],
-            "model_notes": "Host agent read only extracted_text_path from the task.",
+            "model_notes": "Host agent read extracted text only.",
         },
     }
+
+
+def _normalize_semantic_source_record(record: dict[str, Any], *, source_kind: str) -> dict[str, Any]:
+    path = str(record.get("path") or "")
+    source_status = str(record.get("source_extract_status") or record.get("status") or "")
+    status = str(record.get("status") or "")
+    return {
+        "source_kind": source_kind,
+        "path": path,
+        "output_path": str(record.get("output_path") or ""),
+        "source_extract_status": source_status,
+        "status": status,
+        "access_policy": str(record.get("access_policy") or record.get("source_policy") or ""),
+        "policy_source": str(record.get("policy_source") or ""),
+        "policy_reason": str(record.get("policy_reason") or ""),
+        "embedding_allowed": bool(record.get("embedding_allowed", record.get("is_embedding_allowed", False))),
+        "current_title": str(record.get("title") or Path(path).name),
+        "current_summary": str(record.get("summary") or ""),
+        "current_tags": _string_list(record.get("tags")),
+        "current_confidence": _optional_float(record.get("confidence"), default=0.0),
+        "current_review_reason": str(record.get("review_reason") or ""),
+        "needs_human_review": _optional_bool(record.get("needs_human_review"), default=source_kind == "extract"),
+        "content_type": str(record.get("content_type") or ""),
+        "extension": str(record.get("extension") or Path(path).suffix.lower()),
+        "parser": str(record.get("parser") or ""),
+    }
+
+
+def _semantic_index_skip_reason(
+    record: dict[str, Any],
+    *,
+    scope: str,
+    mode: str,
+    selected_roots: list[str],
+    llm_config: dict[str, Any] | None,
+) -> str:
+    path = str(record.get("path") or "")
+    output_path = Path(str(record.get("output_path") or ""))
+    extract_status = str(record.get("source_extract_status") or "")
+    access_policy = str(record.get("access_policy") or "")
+    if not path:
+        return "missing path"
+    if access_policy in BLOCKED_ACCESS_POLICIES:
+        return f"blocked access policy: {access_policy}"
+    if extract_status not in ELIGIBLE_EXTRACT_STATUSES:
+        return f"source extract status is {extract_status or 'unknown'}"
+    if not output_path.is_file():
+        return "missing extracted text output"
+    if scope == "review_only" and not bool(record.get("needs_human_review")):
+        return "outside review_only scope"
+    if scope == "selected_roots" and not _path_under_any_root(path, selected_roots):
+        return "outside selected_roots scope"
+    if mode == "cloud-llm":
+        if not access_policy:
+            return "cloud_missing_policy_context"
+        if not cloud_allowed_for_path(path, access_policy, llm_config):
+            return "cloud_not_authorized"
+    return ""
+
+
+def _semantic_task_record(
+    record: dict[str, Any],
+    *,
+    asset_id: str,
+    task_id: str,
+    kind: str,
+    mode: str,
+    allowed_tags: list[str],
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "schema_version": TASK_SCHEMA_VERSION,
+        "task_id": task_id,
+        "kind": kind,
+        "mode": mode,
+        "asset_id": asset_id,
+        "path": str(record.get("path") or ""),
+        "extracted_text_path": str(record.get("output_path") or ""),
+        "current_title": str(record.get("current_title") or ""),
+        "current_summary": str(record.get("current_summary") or ""),
+        "current_tags": _string_list(record.get("current_tags")),
+        "current_confidence": _optional_float(record.get("current_confidence"), default=0.0),
+        "current_review_reason": str(record.get("current_review_reason") or ""),
+        "content_type": str(record.get("content_type") or ""),
+        "extension": str(record.get("extension") or ""),
+        "parser": str(record.get("parser") or ""),
+        "allowed_tags": allowed_tags,
+        "expected_output_schema": expected_result_schema(),
+        "privacy_context": {
+            "mode": mode,
+            "source": "extracted_text_only",
+            "access_policy": str(record.get("access_policy") or "unknown"),
+            "privacy_level": "local_extracted_text" if mode == "agent-llm" else "cloud_candidate",
+            "embedding_allowed": bool(record.get("embedding_allowed")),
+            "allowed_to_read_original": False,
+            "must_not_read_original": True,
+            "must_not_call_cloud_api_from_cli": mode == "agent-llm",
+            "note": "Host agent may read extracted_text_path only; original path remains for citation and lookup.",
+        },
+    }
+    if extra:
+        payload.update(extra)
+    return payload
 
 
 def _task_skip_reason(action: dict[str, Any], analysis: dict[str, Any] | None, review_item: dict[str, Any]) -> str:
@@ -302,7 +498,7 @@ def _validate_result(record: dict[str, Any], tasks_by_asset: dict[str, dict[str,
     path = str(record.get("path") or "")
     task = tasks_by_asset.get(asset_id)
     if tasks_by_asset and task is None:
-        raise ValueError("asset_id is not in semantic-review-tasks.jsonl")
+        raise ValueError("asset_id is not in semantic task JSONL")
     if task and _path_key(task.get("path")) != _path_key(path):
         raise ValueError("result path does not match the task path")
     tags = _string_list(record.get("tags"))
@@ -311,7 +507,7 @@ def _validate_result(record: dict[str, Any], tasks_by_asset: dict[str, dict[str,
     confidence = _optional_float(record.get("confidence"), default=-1.0)
     if confidence < 0.0 or confidence > 1.0:
         raise ValueError("confidence must be between 0.0 and 1.0")
-    needs_human_review = bool(record.get("needs_human_review", confidence < 0.7))
+    needs_human_review = _optional_bool(record.get("needs_human_review"), default=confidence < 0.7)
     review_reason = str(record.get("review_reason") or "")
     if not review_reason:
         review_reason = "agent_llm_low_confidence" if needs_human_review else "agent_llm_semantic_reviewed"
@@ -329,7 +525,7 @@ def _validate_result(record: dict[str, Any], tasks_by_asset: dict[str, dict[str,
             "key_points": _string_list(record.get("key_points"))[:8],
             "model_notes": str(
                 record.get("model_notes")
-                or "Host agent semantic review. Original file was not read by AnyFile Wiki writeback."
+                or "Host agent read extracted text only."
             ),
         }
     )
@@ -349,7 +545,7 @@ def _apply_result_to_analysis(original: dict[str, Any], result: dict[str, Any]) 
             "content_type": str(result.get("content_type") or original.get("content_type") or "document"),
             "analysis_method": AGENT_REVIEW_METHOD,
             "confidence": _optional_float(result.get("confidence"), default=0.0),
-            "needs_human_review": bool(result.get("needs_human_review")),
+            "needs_human_review": _optional_bool(result.get("needs_human_review"), default=False),
             "review_reason": str(result.get("review_reason") or ""),
             "key_points": _string_list(result.get("key_points"))[:8],
             "model_notes": str(result.get("model_notes") or ""),
@@ -460,6 +656,14 @@ def _default_analysis_path(run_root: Path) -> Path:
     return run_root / "analyze" / "knowledge-index.jsonl"
 
 
+def _default_task_path(agent_review_dir: Path) -> Path:
+    semantic_index = agent_review_dir / "semantic-index-tasks.jsonl"
+    semantic_review = agent_review_dir / "semantic-review-tasks.jsonl"
+    if semantic_index.exists():
+        return semantic_index
+    return semantic_review
+
+
 def _infer_run_root_from_review_path(path: Path) -> Path:
     parent = path.parent
     return parent.parent if parent.name == "review" else parent.parent
@@ -470,11 +674,11 @@ def _infer_run_root_from_agent_review_path(path: Path) -> Path:
     return parent.parent if parent.name in {"agent-review", "agent_review"} else parent.parent
 
 
-def _write_task_instructions(path: Path, *, tasks_path: Path) -> None:
+def _write_task_instructions(path: Path, *, tasks_path: Path, kind: str) -> None:
     lines = [
-        "# Agent Semantic Review Tasks",
+        "# Agent Semantic Tasks",
         "",
-        "宿主 agent 使用本文件夹中的 `semantic-review-tasks.jsonl` 做语义复核。",
+        f"宿主 agent 使用本文件夹中的 `{tasks_path.name}` 做 `{kind}`。",
         "",
         "规则：",
         "",
@@ -488,6 +692,30 @@ def _write_task_instructions(path: Path, *, tasks_path: Path) -> None:
         f"任务清单：`{tasks_path}`",
     ]
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def _normalize_scope(value: str) -> str:
+    return str(value or "").strip().replace("-", "_")
+
+
+def _path_under_any_root(path: str, roots: list[str]) -> bool:
+    if not roots:
+        return False
+    candidate = _path_key(path)
+    for root in roots:
+        root_key = _path_key(root).rstrip("/")
+        if candidate == root_key or candidate.startswith(root_key + "/"):
+            return True
+    return False
+
+
+def _load_tagsafe_llm_config(path: str | Path | None) -> dict[str, Any] | None:
+    if not path:
+        return None
+    candidate = Path(path)
+    if not candidate.exists():
+        return None
+    return load_llm_config(candidate)
 
 
 def _write_jsonl(records: Iterable[dict[str, Any]], path: str | Path) -> None:
@@ -511,6 +739,21 @@ def _optional_float(value: Any, *, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _optional_bool(value: Any, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().casefold()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off", ""}:
+        return False
+    return default
 
 
 def _path_key(value: Any) -> str:

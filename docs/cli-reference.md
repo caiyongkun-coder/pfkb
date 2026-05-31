@@ -22,6 +22,7 @@ python -m pip install -e .[ocr]
 ```powershell
 # 初始化 agent 可读配置
 anyfile-wiki agent-init --profile configs/agent-profile.yaml --out data/daily-run
+anyfile-wiki agent-init --profile configs/agent-profile.yaml --out data/daily-run --analysis-mode agent-llm --semantic-scope all_extractable
 
 # 继续日常断点运行
 anyfile-wiki run --out data/daily-run
@@ -32,7 +33,10 @@ anyfile-wiki run --out data/daily-run --status
 # 查询已有资产索引，不重新扫描原文件
 anyfile-wiki query "预算测算" --profile configs/agent-profile.yaml --json
 
-# 生成宿主 agent 语义复核任务，不要求 AnyFile Wiki 配置 API key
+# 对所有已成功提取、隐私允许的文本生成宿主 agent 语义索引任务，不要求 AnyFile Wiki 配置 API key
+anyfile-wiki agent-task --kind semantic-index --scope all-extractable --out data/daily-run/agent-review
+
+# 只对人工复核页里排队的项目生成宿主 agent 语义复核任务
 anyfile-wiki agent-task --kind semantic-review --in data/daily-run/review/next-actions.jsonl --out data/daily-run/agent-review
 anyfile-wiki agent-review-apply --in data/daily-run/agent-review/results.jsonl
 

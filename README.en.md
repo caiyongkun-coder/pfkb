@@ -76,7 +76,7 @@ AnyFile Wiki is meant to be a knowledge governance layer over the local filesyst
 - Default excludes for system folders, developer noise, dangerous extensions, installers, caches, and temporary files.
 - Dry-run scanning that only traverses paths and metadata; it does not read file bodies.
 - Outputs `scan-plan.md`, `access-log.jsonl`, and `inventory.sqlite`.
-- `anyfile-wiki agent-init` for creating agent-readable profile, privacy, roots, and idle-scan configs.
+- `anyfile-wiki agent-init` for creating agent-readable profile, privacy, roots, index-understanding mode, and idle-scan configs.
 - `anyfile-wiki query` for searching existing asset indexes and sidecars without rescanning original files.
 - `anyfile-wiki usage-event` for recording agent selections, opens, citations, and search hits.
 - CLI commands: `anyfile-wiki privacy`, `anyfile-wiki status`, `anyfile-wiki list`, `anyfile-wiki show`, `anyfile-wiki roots`, `anyfile-wiki tags`.
@@ -86,6 +86,7 @@ AnyFile Wiki is meant to be a knowledge governance layer over the local filesyst
 - Incremental extraction: unchanged successful sources are skipped by default, with `--force` and `--retry-failed` available.
 - `anyfile-wiki analyze` for local rule-based summaries, tags, and knowledge indexes from extracted text; `--method codex-mock`, `--method local-llm`, and `--method cloud-llm` are supported.
 - Real LLM/API analysis only receives privacy-gated extracted text; cloud mode also requires explicit allowed paths and risk acknowledgement.
+- Host-agent semantic indexing for Codex / OpenClaw / Hermes: `agent-task --kind semantic-index` or `semantic-review`, then `agent-review-apply`; AnyFile Wiki does not need a duplicate API key in this mode.
 - `anyfile-wiki llm` for explaining local/cloud model policy and cloud-read boundaries.
 - `anyfile-wiki review` for Markdown, JSONL, and `human-review.html` review outputs covering unreadable, unsupported, low-confidence, or cloud-unauthorized files.
 - `anyfile-wiki review-server` for a local `127.0.0.1` review service where the page submits decisions directly to local files.
@@ -101,7 +102,6 @@ Since MVP4, the recommended path is to install the Agent Skill first, then let C
 
 ```powershell
 python scripts/install_agent_skill.py --editable --extras parse,ocr
-anyfile-wiki agent-init --profile configs/agent-profile.yaml --out data/daily-run
 ```
 
 Then tell your agent:
@@ -111,6 +111,8 @@ Use AnyFile Wiki to initialize my scan roots and explain the privacy config.
 Continue the AnyFile Wiki daily scan.
 Find where my budget measurement files are.
 ```
+
+First setup should be guided by the agent: it runs `agent-init`, reads privacy/roots/analysis setup questions, asks about sensitive paths, first scan roots, metadata-only folders, and index understanding mode. Choose `rules` for fast local summaries, `agent-llm` for host-agent semantic understanding without an extra API key, `local-llm` for a local model service, or `cloud-llm` only after explicit allowed paths and risk acknowledgement. The agent should run a dry-run scan before extraction or analysis.
 
 Detailed CLI examples live in the [CLI Reference](docs/cli-reference.md), so the README stays focused on the agent-first workflow. `anyfile-wiki scan` is always a safe dry-run: it creates an access plan and inventory, but does not read file bodies, summarize files, or write vectors.
 
@@ -152,6 +154,7 @@ src/anyfile_wiki/
   tags.py                    Tag taxonomy parser
   parse.py                   Privacy-gated extraction pipeline
   analyze.py                 Local rule-based summaries, tags, and knowledge indexes
+  agent_review.py            Host-agent semantic index/review task and writeback protocol
   llm_client.py              Local/cloud LLM API client
   review.py                  Human review list builder
   decisions.py               Human decisions and agent follow-up action plans
@@ -171,7 +174,7 @@ tests/
 - MVP2: local summaries, tags, topics, projects, and file-type classification.
 - MVP2.1: LLM policy, cloud authorization boundaries, and human review lists.
 - MVP3: human-browsable asset map. The HTML asset browser, human review page, local submit service, and review writeback to `asset-index.jsonl` are now implemented.
-- MVP4: agent skill / MCP integration. The Codex Skill, agent init, index query, and usage-event entry points are now implemented.
+- MVP4: agent skill / MCP integration. The Codex Skill, agent init, index query, usage-event entry points, and host-agent semantic index/review writeback protocol are now implemented.
 - MVP5: safe cleanup assistant: duplicates, archive candidates, delete candidates, reversible manifests.
 - MVP6: app personal-data adapters: browser bookmarks, chat exports, email, note apps, and more.
 
@@ -202,7 +205,7 @@ Current tests cover:
 - Dry-run scanning without reading file bodies.
 - Inventory queries.
 - CLI `status/list/show`.
-- Agent init, index query, usage events, and Skill installation.
+- Agent init, index query, usage events, Skill installation, and host-agent semantic index writeback.
 - Suggested scan root discovery.
 - Recommended scan roots config explanation and JSON output.
 - Parser-job policy gating.

@@ -15,7 +15,7 @@ from .agent import (
     initialize_agent_workspace,
     query_assets,
 )
-from .agent_review import apply_semantic_review_results, build_semantic_review_tasks
+from .agent_review import apply_semantic_review_results, build_semantic_index_tasks, build_semantic_review_tasks
 from .analyze import (
     AnalysisResult,
     analyze_extract_records,
@@ -76,6 +76,18 @@ def build_parser() -> ArgumentParser:
     agent_init.add_argument("--roots-config", default=None, help="Optional roots.yaml target path")
     agent_init.add_argument("--privacy", default=None, help="Optional privacy.yaml target path")
     agent_init.add_argument("--schedule", default=None, help="Optional schedule.yaml target path")
+    agent_init.add_argument(
+        "--analysis-mode",
+        choices=["rules", "agent-llm", "local-llm", "cloud-llm"],
+        default="rules",
+        help="Initial index understanding mode to write when creating agent-profile.yaml",
+    )
+    agent_init.add_argument(
+        "--semantic-scope",
+        choices=["review_only", "all_extractable", "selected_roots"],
+        default="review_only",
+        help="Initial semantic indexing scope for agent/profile guidance",
+    )
     agent_init.add_argument("--json", action="store_true", help="Emit JSON")
     agent_init.set_defaults(func=cmd_agent_init)
 
@@ -95,24 +107,39 @@ def build_parser() -> ArgumentParser:
     usage_event.add_argument("--json", action="store_true", help="Emit JSON")
     usage_event.set_defaults(func=cmd_usage_event)
 
-    agent_task = subparsers.add_parser("agent-task", help="Create host-agent tasks from review actions")
-    agent_task.add_argument("--kind", choices=["semantic-review"], default="semantic-review", help="Agent task kind")
+    agent_task = subparsers.add_parser("agent-task", help="Create host-agent semantic tasks from review actions or extracted indexes")
+    agent_task.add_argument("--kind", choices=["semantic-review", "semantic-index"], default="semantic-review", help="Agent task kind")
     agent_task.add_argument(
         "--in",
         dest="input_path",
         default="data/daily-run/review/next-actions.jsonl",
-        help="Input next-actions.jsonl path",
+        help="Input next-actions.jsonl path for semantic-review",
     )
     agent_task.add_argument("--out", default="data/daily-run/agent-review", help="Agent task output directory")
     agent_task.add_argument("--analysis", default=None, help="Optional analysis-manifest.jsonl path")
+    agent_task.add_argument("--extract-manifest", default=None, help="Optional extract-manifest.jsonl path for semantic-index")
     agent_task.add_argument("--review-items", default=None, help="Optional human-review.jsonl path")
+    agent_task.add_argument(
+        "--scope",
+        choices=["review-only", "review_only", "all-extractable", "all_extractable", "selected-roots", "selected_roots"],
+        default="review-only",
+        help="Semantic-index scope",
+    )
+    agent_task.add_argument(
+        "--mode",
+        choices=["agent-llm", "cloud-llm"],
+        default="agent-llm",
+        help="Semantic task mode. cloud-llm only creates tasks after cloud policy checks pass",
+    )
+    agent_task.add_argument("--selected-root", action="append", default=[], help="Allowed root for --scope selected-roots")
+    agent_task.add_argument("--llm-config", default="configs/llm.example.yaml", help="LLM policy YAML for cloud-llm task gating")
     agent_task.add_argument("--tags-config", default="configs/tags.example.yaml", help="Tag taxonomy YAML")
     agent_task.add_argument("--json", action="store_true", help="Emit JSON")
     agent_task.set_defaults(func=cmd_agent_task)
 
     agent_review_apply = subparsers.add_parser(
         "agent-review-apply",
-        help="Validate host-agent semantic-review results and refresh analysis/assets/html",
+        help="Validate host-agent semantic task results and refresh analysis/assets/html",
     )
     agent_review_apply.add_argument(
         "--in",
@@ -122,7 +149,7 @@ def build_parser() -> ArgumentParser:
     )
     agent_review_apply.add_argument("--run", default=None, help="Run directory. Defaults to the parent of agent-review")
     agent_review_apply.add_argument("--analysis", default=None, help="Optional analysis-manifest.jsonl path")
-    agent_review_apply.add_argument("--tasks", default=None, help="Optional semantic-review-tasks.jsonl path")
+    agent_review_apply.add_argument("--tasks", default=None, help="Optional semantic task JSONL path")
     agent_review_apply.add_argument("--actions", default=None, help="Optional next-actions.jsonl path")
     agent_review_apply.add_argument("--review-items", default=None, help="Optional human-review.jsonl path")
     agent_review_apply.add_argument("--tags-config", default="configs/tags.example.yaml", help="Tag taxonomy YAML")
@@ -346,6 +373,8 @@ def cmd_agent_init(args) -> int:
         roots_config=args.roots_config,
         privacy_config=args.privacy,
         schedule_config=args.schedule,
+        analysis_mode=args.analysis_mode,
+        semantic_scope=args.semantic_scope,
     )
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -385,16 +414,28 @@ def cmd_usage_event(args) -> int:
 
 
 def cmd_agent_task(args) -> int:
-    if args.kind != "semantic-review":
+    if args.kind == "semantic-index":
+        payload = build_semantic_index_tasks(
+            output_dir=args.out,
+            analysis_path=args.analysis,
+            extract_manifest_path=args.extract_manifest,
+            scope=args.scope,
+            mode=args.mode,
+            selected_roots=args.selected_root,
+            llm_config_path=args.llm_config,
+            tags_config_path=args.tags_config,
+        )
+    elif args.kind == "semantic-review":
+        payload = build_semantic_review_tasks(
+            actions_path=args.input_path,
+            output_dir=args.out,
+            analysis_path=args.analysis,
+            review_items_path=args.review_items,
+            tags_config_path=args.tags_config,
+        )
+    else:
         print(f"unsupported agent task kind: {args.kind}", file=sys.stderr)
         return 2
-    payload = build_semantic_review_tasks(
-        actions_path=args.input_path,
-        output_dir=args.out,
-        analysis_path=args.analysis,
-        review_items_path=args.review_items,
-        tags_config_path=args.tags_config,
-    )
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
