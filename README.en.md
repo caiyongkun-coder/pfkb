@@ -7,9 +7,21 @@
 ![Privacy](https://img.shields.io/badge/Privacy-local--first-brightgreen)
 ![Status](https://img.shields.io/badge/Status-MVP4--ready-orange)
 
-AnyFile Wiki is a local-first knowledge base for personal computer files. Its goal is to let local agents such as OpenClaw, Hermes, Codex, and similar tools safely inventory personal files during idle time, then gradually turn documents, notes, PDFs, spreadsheets, code, and app data into searchable, browsable, reusable knowledge assets.
+AnyFile Wiki is a local-first personal file knowledge governance layer for AI agents. Its goal is to let local agents such as OpenClaw, Hermes, Codex, and similar tools apply privacy rules first, then safely inventory personal files during idle time and gradually turn documents, notes, PDFs, spreadsheets, code, and app data into searchable, browsable, reusable knowledge assets.
 
 It is not just another RAG chat app. AnyFile Wiki is a local file knowledge governance layer: it first decides what is safe to touch, then extracts, summarizes, tags, builds an asset index, creates virtual collections, and gives auditable archive/delete suggestions without moving, deleting, or renaming your original files.
+
+## Safest First Test
+
+Do not start by scanning your whole machine or a sensitive directory. Create a small folder with synthetic or non-sensitive files first, then run a dry-run:
+
+```powershell
+anyfile-wiki scan .\demo-files\input --privacy .\demo-files\demo_privacy.yaml --out .\demo-files\out --max-entries 50
+```
+
+`anyfile-wiki scan` is a dry-run: it writes an access plan, audit log, and inventory, but it does not read file bodies, summarize files, or write vectors.
+
+If you share feedback, please do not upload personal files, sensitive paths, secrets, chat exports, or screenshots containing private filenames. The most useful reports include OS, Python version, redacted commands, redacted output, a synthetic sample folder shape, and the exact point where the privacy boundary felt unclear.
 
 ## One-Minute Overview
 

@@ -7,9 +7,21 @@
 ![Privacy](https://img.shields.io/badge/Privacy-local--first-brightgreen)
 ![Status](https://img.shields.io/badge/Status-MVP4--ready-orange)
 
-AnyFile Wiki 是一个本地优先的个人文件知识库项目。它让 OpenClaw、Hermes、Codex 等 agent 在空闲时，安全地盘点电脑里的文档、表格、PDF、图片、代码和应用数据，把长期沉淀的文件整理成可搜索、可浏览、可复用的知识资产。
+AnyFile Wiki 是一个给 AI agent 用的本地优先个人文件知识治理层。它让 OpenClaw、Hermes、Codex 等 agent 在空闲时，先通过隐私策略判断哪些文件能读、哪些只能记录元数据、哪些完全禁止，再把长期沉淀的文档、表格、PDF、图片、代码和应用数据整理成可搜索、可浏览、可复用的知识资产。
 
 它不是普通 RAG 聊天工具。AnyFile Wiki 更像一个“本地文件知识治理层”：先判断文件能不能碰，再提取、摘要、打标签、生成资产索引和虚拟资料体系，最后只给出可审计的归档/删除建议，不直接改动你的原始文件。
+
+## 最安全的首次试用
+
+第一次不要扫全盘，也不要扫敏感目录。建议先创建一个只包含合成文件或非敏感文件的小目录，然后只做 dry-run：
+
+```powershell
+anyfile-wiki scan .\demo-files\input --privacy .\demo-files\demo_privacy.yaml --out .\demo-files\out --max-entries 50
+```
+
+`anyfile-wiki scan` 是 dry-run：只生成访问计划、审计日志和 inventory，不读取文件正文、不生成摘要、不写入向量库。
+
+如果你愿意反馈问题，请不要上传个人文件、真实敏感路径、密钥、聊天记录或包含私人文件名的截图。最有帮助的是：操作系统、Python 版本、脱敏命令、脱敏输出、合成样例目录结构，以及你觉得隐私边界不清楚的地方。
 
 ## 一分钟看懂
 
