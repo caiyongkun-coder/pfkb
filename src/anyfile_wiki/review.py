@@ -140,7 +140,7 @@ def build_review_items(
                         category="rules_only_or_low_confidence",
                         reason_code=review_reason,
                         reason=f"{_analysis_review_reason_label(review_reason)}（`{review_reason}`）",
-                        action="优先使用本地 LLM 复核；也可以人工确认摘要和标签。暂不处理时，保留规则版结果即可。",
+                        action="优先交给宿主 agent 大模型读取已提取文本做语义复核；也可以人工确认摘要和标签。暂不处理时，保留规则版结果即可。",
                         severity="low" if not needs_human_review else "medium",
                         access_policy=access_policy,
                         policy_source=str(record.get("policy_source") or ""),
@@ -169,7 +169,7 @@ def build_review_items(
     return _dedupe_items(items)
 
 
-def write_review_outputs(items: list[ReviewItem], output_dir: str | Path) -> dict[str, Path]:
+def write_review_outputs(items: list[ReviewItem], output_dir: str | Path) -> dict[str, Path | str]:
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
     jsonl_path = root / "human-review.jsonl"
@@ -179,7 +179,16 @@ def write_review_outputs(items: list[ReviewItem], output_dir: str | Path) -> dic
             handle.write(json.dumps(asdict(item), ensure_ascii=False, sort_keys=True) + "\n")
     write_review_md(items, md_path)
     html_path = write_human_review_html(items, root, source_path=jsonl_path)
-    return {"human_review_jsonl": jsonl_path, "human_review_md": md_path, "human_review_html": html_path}
+    return {
+        "review_server_command": review_server_command(root),
+        "human_review_jsonl": jsonl_path,
+        "human_review_md": md_path,
+        "human_review_html_fallback": html_path,
+    }
+
+
+def review_server_command(review_dir: str | Path) -> str:
+    return f"anyfile-wiki review-server --review-dir {Path(review_dir)} --once"
 
 
 def write_review_md(items: list[ReviewItem], path: str | Path) -> None:
@@ -371,7 +380,7 @@ def _category_hint(category: str) -> str:
         "unsupported_format": "这些文件需要新增解析器、转换格式，或由用户手动整理。",
         "not_extracted": "这些文件理论上可提取，但还没有提取记录。",
         "extraction_problem": "这些文件提取失败或被跳过，通常需要安装解析依赖或人工处理。",
-        "rules_only_or_low_confidence": "这些结果来自规则版分析，不等于大模型理解，需要用户或本地 LLM 复核。",
+        "rules_only_or_low_confidence": "这些结果来自规则版分析，不等于大模型理解，需要用户或宿主 agent 大模型复核。",
         "cloud_not_authorized": "云端模式下，这些路径没有显式授权，不能发送正文。",
     }
     return hints.get(category, "")

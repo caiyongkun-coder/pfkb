@@ -25,10 +25,10 @@
 - 已能生成 `knowledge-index.html` 资产浏览页，支持中英双语、标签树、搜索、筛选、分页和详情面板。
 - 已能生成 `human-review.html` 人工复核批复页。
 - 新增 `anyfile-wiki review-server`，可启动本地批复服务，让页面直接提交并写入本地批复结果。
-- 人工复核页支持确认当前结果、允许本地 LLM、允许云端 LLM、已人工整理、忽略、稍后处理、保持隐私。
+- 人工复核页支持确认当前结果、让宿主 agent 大模型复核、已人工整理、忽略、稍后处理、保持隐私。
 - 人工复核页可导出 `review-decisions.jsonl`。
 - `anyfile-wiki decisions` 可读取 `review-decisions.jsonl`，生成批复摘要、`next-actions.jsonl` 和 `decision-plan.md`。
-- `next-actions.jsonl` 已能把人类批复转成 agent 后续动作：本地 LLM 复核队列、云端授权候选、忽略候选、人工标签覆盖、稍后复核和保持隐私。
+- `next-actions.jsonl` 已能把人类批复转成 agent 后续动作：宿主 agent 语义复核队列、忽略候选、人工标签覆盖、稍后复核和保持隐私。
 - 新增 `anyfile-wiki assets`，可把 `knowledge-index.jsonl`、`human-review.jsonl` 和 `next-actions.jsonl` 合并为最终 `asset-index.jsonl`、`asset-index.md`，并刷新 `knowledge-index.html`。
 - 新增资产 sidecar 索引：`asset-signature.jsonl`、`collection-index.jsonl`、`asset-usage-events.jsonl`、`asset-score.jsonl` 和 `asset-sidecar-report.md`，让 agent 能通过 `asset_id` 串联主索引、虚拟资料族和文件管理建议。
 - `review-server` 服务版提交后，如果处在标准 run 目录结构中，会自动生成/刷新 `assets/asset-index.jsonl` 和 `html/knowledge-index.html`。
@@ -59,15 +59,15 @@
 
 ## 当前设计结论
 
-- `knowledge-index.html` 和 `human-review.html` 都是静态页面，不需要后端服务。
-- 静态页面只负责人类浏览和批复，不直接启动本地命令。
-- 人类批复导出为 `review-decisions.jsonl` 后，由 agent 或 CLI 继续读取；当前已经能把批复动作回写到最终资产索引。
+- `knowledge-index.html` 是静态资产浏览页；人工批复默认使用 `review-server` 服务页，`human-review.html` 只是服务不可用时的静态备选。
+- 服务页直接写回 `review-decisions.jsonl`、`next-actions.jsonl` 和批复计划；静态页面只负责手动导出，不直接启动本地命令。
+- 人类批复写回后，由 agent 或 CLI 继续读取；当前已经能把批复动作回写到最终资产索引。
 - 当前“执行下一步”会更新资产状态和后续动作，不直接移动、删除、重命名源文件，也不直接修改隐私配置。
 - 日常运行入口使用路径游标做第一版断点续跑，先解决 agent 空闲时间短时的持续推进问题。
 - 云端 LLM 必须显式授权目录和确认风险；默认不允许云端读取本地文件。
 
 ## 下一步建议
 
-下一步优先补“本地 LLM 复核队列”的实际执行：从 `asset-index.jsonl` 找出 `local_llm_queue`，在隐私策略允许时重新分析并回写资产索引。云端 LLM 候选仍只生成配置建议，必须等待人类确认。
+下一步优先打磨宿主 agent 语义复核体验：从 `queue_agent_semantic_review` 生成任务、读取已提取文本、回写资产索引，并保证复核页不把这个动作误导成云端授权。
 
 随后增强 `run-state.json`：增加时间预算、失败重试策略和更细的目录级扫描游标。

@@ -24,6 +24,7 @@ from .analyze import (
     write_analysis_outputs,
 )
 from .assets import build_asset_index, load_jsonl_records, write_asset_outputs
+from .cleanup import build_archive_plan, write_archive_plan_outputs
 from .decisions import (
     actions_as_dicts,
     build_decision_actions,
@@ -325,6 +326,48 @@ def build_parser() -> ArgumentParser:
     sidecars.add_argument("--dry-run", action="store_true", help="Print the sidecar plan without writing files")
     sidecars.add_argument("--json", action="store_true", help="Emit JSON")
     sidecars.set_defaults(func=cmd_sidecars)
+
+    archive_plan = subparsers.add_parser(
+        "archive-plan",
+        help="Write a reviewable archive/delete candidate plan from sidecar scores",
+    )
+    archive_plan.add_argument("--asset-index", default="data/assets/asset-index.jsonl", help="Existing asset-index.jsonl path")
+    archive_plan.add_argument(
+        "--collection-index",
+        default=None,
+        help="collection-index.jsonl path. Defaults to the asset-index directory",
+    )
+    archive_plan.add_argument(
+        "--asset-score",
+        default=None,
+        help="asset-score.jsonl path. Defaults to the asset-index directory",
+    )
+    archive_plan.add_argument("--out", default="data/cleanup", help="Cleanup plan output directory")
+    archive_plan.add_argument(
+        "--min-duplicate-confidence",
+        type=float,
+        default=0.7,
+        help="Minimum duplicate confidence to include duplicate candidates",
+    )
+    archive_plan.add_argument(
+        "--min-archive-score",
+        type=float,
+        default=0.55,
+        help="Minimum archive score to include nas/cold archive candidates",
+    )
+    archive_plan.add_argument(
+        "--max-delete-risk",
+        type=float,
+        default=0.35,
+        help="Maximum delete risk score allowed for delete review candidates",
+    )
+    archive_plan.add_argument(
+        "--include-review-required",
+        action="store_true",
+        help="Also include review-required assets as manual-review-before-cleanup candidates",
+    )
+    archive_plan.add_argument("--json", action="store_true", help="Emit JSON")
+    archive_plan.set_defaults(func=cmd_archive_plan)
 
     run = subparsers.add_parser("run", help="Run one resumable daily processing step with run-state.json")
     run.add_argument("roots", nargs="*", help="Root directories or files. Required when creating a new run state")
@@ -803,9 +846,9 @@ def cmd_review(args) -> int:
         return 0
     print(f"files_inspected: {len(files)}")
     print(f"review_items: {len(items)}")
+    print("preferred_review_mode: service")
     for name, path in outputs.items():
         print(f"{name}: {path}")
-    print(f"recommended_review_server: anyfile-wiki review-server --review-dir {Path(args.out)} --once")
     for category, count in sorted(stats.items()):
         print(f"{category}: {count}")
     if reason_stats:
@@ -957,6 +1000,63 @@ def cmd_sidecars(args) -> int:
         return 0
     action = "planned sidecars" if args.dry_run else "wrote sidecars"
     print(f"{action}: {len(records)} records")
+    for key, value in stats.items():
+        print(f"{key}: {value}")
+    for name, path in outputs.items():
+        print(f"{name}: {path}")
+    return 0
+
+
+def cmd_archive_plan(args) -> int:
+    asset_index_path = Path(args.asset_index)
+    if not asset_index_path.exists():
+        print(f"asset index file not found: {asset_index_path}", file=sys.stderr)
+        return 2
+    sidecar_dir = asset_index_path.parent
+    collection_index_path = Path(args.collection_index) if args.collection_index else sidecar_dir / "collection-index.jsonl"
+    asset_score_path = Path(args.asset_score) if args.asset_score else sidecar_dir / "asset-score.jsonl"
+    if not collection_index_path.exists():
+        print(f"collection index file not found: {collection_index_path}", file=sys.stderr)
+        print("run `anyfile-wiki sidecars --asset-index <asset-index>` first", file=sys.stderr)
+        return 2
+    if not asset_score_path.exists():
+        print(f"asset score file not found: {asset_score_path}", file=sys.stderr)
+        print("run `anyfile-wiki sidecars --asset-index <asset-index>` first", file=sys.stderr)
+        return 2
+
+    assets = attach_asset_ids(load_jsonl_records(asset_index_path))
+    collections = load_jsonl_records(collection_index_path)
+    scores = load_jsonl_records(asset_score_path)
+    plan = build_archive_plan(
+        assets,
+        collections,
+        scores,
+        min_duplicate_confidence=args.min_duplicate_confidence,
+        min_archive_score=args.min_archive_score,
+        max_delete_risk=args.max_delete_risk,
+        include_review_required=bool(args.include_review_required),
+    )
+    outputs, stats = write_archive_plan_outputs(
+        plan,
+        args.out,
+        asset_index_path=asset_index_path,
+        collection_index_path=collection_index_path,
+        asset_score_path=asset_score_path,
+    )
+    payload = {
+        "records": len(plan),
+        "stats": stats,
+        "outputs": {name: str(path) for name, path in outputs.items()},
+        "safety": {
+            "proposed_only": True,
+            "executes_filesystem_actions": False,
+            "requires_human_confirmation": True,
+        },
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    print(f"archive_plan: {len(plan)} candidates")
     for key, value in stats.items():
         print(f"{key}: {value}")
     for name, path in outputs.items():

@@ -76,12 +76,14 @@ anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/fir
 anyfile-wiki analyze --inventory data/first-scan/inventory.sqlite --out data/first-analyze-codex --method codex-mock --compare-to data/first-analyze/analysis-manifest.jsonl
 
 anyfile-wiki review --inventory data/first-scan/inventory.sqlite --analysis data/first-analyze/analysis-manifest.jsonl --out data/first-review
+# 人工批复默认推荐服务模式；打开 review-server 打印的 review_url，可以直接写回本地批复结果
 anyfile-wiki review-server --review-dir data/first-review --once
 anyfile-wiki decisions --decisions data/first-review/review-decisions.jsonl --out data/first-review/decisions-summary.md --actions-out data/first-review/next-actions.jsonl --plan-out data/first-review/decision-plan.md
 
 anyfile-wiki assets --analysis data/first-analyze/knowledge-index.jsonl --actions data/first-review/next-actions.jsonl --review-items data/first-review/human-review.jsonl --out data/first-assets --html-out data/first-html
 anyfile-wiki sidecars --asset-index data/first-assets/asset-index.jsonl --out data/first-assets
 anyfile-wiki sidecars --asset-index data/first-assets/asset-index.jsonl --out data/first-assets --dry-run
+anyfile-wiki archive-plan --asset-index data/first-assets/asset-index.jsonl --out data/first-cleanup
 anyfile-wiki html --analysis data/first-analyze/knowledge-index.jsonl --out data/first-html
 ```
 

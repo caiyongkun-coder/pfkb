@@ -33,6 +33,7 @@ def default_agent_profile(
                 "Read indexes before opening original files.",
                 "Never move, delete, or rename original files from this profile.",
                 "Cloud LLM access must be explicitly authorized in llm/privacy config.",
+                "During first-time setup, do not stop after collecting a scan directory; guide privacy, roots, metadata-only, no-embedding, analysis mode, and dry-run confirmation.",
             ],
             "query_order": [
                 "agent-profile.yaml",
@@ -46,6 +47,17 @@ def default_agent_profile(
         "workspace": {
             "default_run_dir": _posix(run_dir),
             "default_profile": _posix(profile),
+        },
+        "setup_contract": {
+            "first_run_must_be_guided": True,
+            "do_not_stop_after_directory_prompt": True,
+            "required_steps": [
+                "run agent-init",
+                "read privacy.yaml, roots.yaml, schedule.yaml, and this profile",
+                "ask setup_questions for sensitive paths, first scan roots, metadata-only paths, no-embedding paths, and analysis mode",
+                "summarize planned config edits before changing existing files",
+                "run dry-run scan first and explain scan-plan/access-log before extraction or analysis",
+            ],
         },
         "configs": {
             "privacy": _posix(profile.parent / "privacy.yaml"),
@@ -65,7 +77,10 @@ def default_agent_profile(
         },
         "review": {
             "review_dir": _posix(run_dir / "review"),
-            "html_path": _posix(run_dir / "review" / "human-review.html"),
+            "preferred_mode": "service",
+            "service_command": f"anyfile-wiki review-server --review-dir {_posix(run_dir / 'review')} --once",
+            "service_note": "Start this local service and open the printed review_url for writable review. Do not send users to the static HTML unless the service cannot be started.",
+            "html_fallback_path": _posix(run_dir / "review" / "human-review.html"),
             "decisions_path": _posix(run_dir / "review" / "review-decisions.jsonl"),
         },
         "analysis": {
@@ -156,6 +171,7 @@ def initialize_agent_workspace(
         "next_commands": [
             f'anyfile-wiki run "<scan-root>" --privacy "{_posix(targets["privacy"])}" --out "{_posix(run_dir)}"',
             f'anyfile-wiki run --out "{_posix(run_dir)}"',
+            f'anyfile-wiki review-server --review-dir "{_posix(run_dir / "review")}" --once',
             f'anyfile-wiki agent-task --kind semantic-index --scope {semantic_scope.replace("_", "-")} --out "{_posix(run_dir / "agent-review")}"',
             f'anyfile-wiki query "<keyword>" --profile "{_posix(profile)}" --json',
         ],
@@ -329,10 +345,28 @@ def _copy_template_if_missing(*, source: Path, target: Path) -> dict[str, str]:
 
 def _write_profile_if_missing(path: Path, profile: dict[str, Any]) -> dict[str, str]:
     if path.exists():
-        return {"path": _posix(path), "status": "exists"}
+        existing = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}
+        if not isinstance(existing, dict):
+            raise ValueError(f"agent profile must be a mapping: {path}")
+        merged = _merge_missing(existing, profile)
+        if merged == existing:
+            return {"path": _posix(path), "status": "exists"}
+        path.write_text(yaml.safe_dump(merged, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        return {"path": _posix(path), "status": "updated"}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(profile, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return {"path": _posix(path), "status": "created"}
+
+
+def _merge_missing(existing: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(existing)
+    for key, value in defaults.items():
+        if key not in merged:
+            merged[key] = value
+            continue
+        if isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _merge_missing(merged[key], value)
+    return merged
 
 
 def _query_terms(query: str) -> list[str]:

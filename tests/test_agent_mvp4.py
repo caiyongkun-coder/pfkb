@@ -66,9 +66,16 @@ def test_agent_init_creates_agent_readable_configs_without_overwriting(tmp_path)
     profile_payload = yaml.safe_load(profile.read_text(encoding="utf-8"))
     assert profile_payload["safety"]["allow_delete"] is False
     assert profile_payload["indexes"]["asset_index"].endswith("asset-index.jsonl")
+    assert profile_payload["setup_contract"]["first_run_must_be_guided"] is True
+    assert profile_payload["setup_contract"]["do_not_stop_after_directory_prompt"] is True
+    assert profile_payload["review"]["preferred_mode"] == "service"
+    assert "review-server" in profile_payload["review"]["service_command"]
+    assert profile_payload["review"]["html_fallback_path"].endswith("human-review.html")
     assert profile_payload["analysis"]["mode"] == "rules"
     assert profile_payload["analysis"]["semantic_scope"] == "review_only"
     assert payload["analysis"]["mode"] == "rules"
+    assert payload["review"]["preferred_mode"] == "service"
+    assert any("review-server" in command for command in payload["next_commands"])
 
     original = profile.read_text(encoding="utf-8")
     code, stdout, stderr = _run_cli(["agent-init", "--profile", str(profile), "--out", str(run_dir), "--json"])
@@ -105,6 +112,36 @@ def test_agent_init_can_choose_agent_llm_index_understanding_mode(tmp_path):
     assert profile_payload["analysis"]["semantic_scope"] == "all_extractable"
     assert "不需要额外 API key" in profile_payload["analysis"]["mode_notes"]["agent-llm"]
     assert payload["analysis"]["mode"] == "agent-llm"
+
+
+def test_agent_init_supplements_existing_profile_without_overwriting_user_values(tmp_path):
+    profile = tmp_path / "configs" / "agent-profile.yaml"
+    run_dir = tmp_path / "data" / "daily-run"
+    profile.parent.mkdir(parents=True)
+    profile.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "workspace": {"default_run_dir": "custom/run"},
+                "review": {"html_path": "old/static/human-review.html"},
+                "safety": {"allow_delete": False},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    code, stdout, stderr = _run_cli(["agent-init", "--profile", str(profile), "--out", str(run_dir), "--json"])
+
+    assert code == 0, stderr
+    payload = json.loads(stdout)
+    assert payload["profile"]["status"] == "updated"
+    profile_payload = yaml.safe_load(profile.read_text(encoding="utf-8"))
+    assert profile_payload["workspace"]["default_run_dir"] == "custom/run"
+    assert profile_payload["review"]["html_path"] == "old/static/human-review.html"
+    assert profile_payload["review"]["preferred_mode"] == "service"
+    assert "review-server" in profile_payload["review"]["service_command"]
+    assert profile_payload["setup_contract"]["do_not_stop_after_directory_prompt"] is True
 
 
 def test_query_searches_asset_sidecars_without_reading_original_files(tmp_path):
@@ -265,17 +302,17 @@ def test_agent_task_builds_privacy_gated_semantic_review_tasks(tmp_path):
         [
             {
                 "path": str(source),
-                "action": "queue_local_llm_review",
-                "source_decision": "allow_local_llm",
+                "action": "queue_agent_semantic_review",
+                "source_decision": "request_agent_review",
                 "category": "rules_only_or_low_confidence",
-                "privacy_level": "local",
+                "privacy_level": "local_extracted_text",
             },
             {
                 "path": str(tmp_path / "private.md"),
-                "action": "propose_cloud_llm_authorization",
-                "source_decision": "allow_cloud_llm",
+                "action": "queue_agent_semantic_review",
+                "source_decision": "request_agent_review",
                 "category": "metadata_only",
-                "privacy_level": "cloud_candidate",
+                "privacy_level": "local_extracted_text",
             },
         ],
     )
@@ -561,10 +598,10 @@ def test_agent_review_apply_refreshes_analysis_assets_and_html(tmp_path):
         [
             {
                 "path": str(source),
-                "action": "queue_local_llm_review",
-                "source_decision": "allow_local_llm",
+                "action": "queue_agent_semantic_review",
+                "source_decision": "request_agent_review",
                 "category": "rules_only_or_low_confidence",
-                "privacy_level": "local",
+                "privacy_level": "local_extracted_text",
             }
         ],
     )
@@ -621,6 +658,8 @@ def test_anyfile_wiki_skill_has_required_agent_workflows():
     assert "agent-review-apply" in skill
     assert "usage-event" in skill
     assert "Never move, delete, rename" in skill
+    assert "do not stop after asking for scan folders" in skill
+    assert "start `review-server`, open the printed `review_url`" in skill
     assert "human-review.html" in skill
 
 

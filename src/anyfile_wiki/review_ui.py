@@ -841,8 +841,7 @@ __ANYFILE_WIKI_MANUAL_EXPORT__
     const STORAGE_KEY = `anyfile-wiki-review:${REVIEW_DATA.source_path || "embedded"}:${(REVIEW_DATA.items || []).length}`;
     const DECISIONS = [
       ["confirm_current", "确认当前结果 / Confirm"],
-      ["allow_local_llm", "允许本地 LLM / Local LLM"],
-      ["allow_cloud_llm", "允许云端 LLM / Cloud LLM"],
+      ["request_agent_review", "让 Agent 大模型复核 / Agent review"],
       ["mark_manual", "已人工整理 / Manually done"],
       ["ignore", "忽略 / Ignore"],
       ["later", "稍后处理 / Later"],

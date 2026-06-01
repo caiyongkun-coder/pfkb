@@ -245,6 +245,9 @@ def test_review_cli_writes_human_review_outputs(tmp_path):
     )
 
     assert code == 0, stderr
+    assert "preferred_review_mode: service" in stdout
+    assert "review_server_command" in stdout
+    assert "human_review_html_fallback" in stdout
     assert "human_review_md" in stdout
     review_md = out_dir / "human-review.md"
     review_jsonl = out_dir / "human-review.jsonl"
@@ -286,7 +289,9 @@ def test_render_human_review_html_embeds_items_and_decision_controls(tmp_path):
 
     assert "AnyFile Wiki 人工复核" in html
     assert "Human review" in html
-    assert "允许本地 LLM / Local LLM" in html
+    assert "让 Agent 大模型复核 / Agent review" in html
+    assert "允许本地 LLM / Local LLM" not in html
+    assert "允许云端 LLM / Cloud LLM" not in html
     assert "保持隐私 / Keep private" in html
     assert "review-decisions.jsonl" in html
     assert "human-review.jsonl" in html
@@ -381,7 +386,7 @@ def test_review_server_submits_decisions_and_writes_action_outputs(tmp_path):
                     "path": str(source),
                     "category": "rules_only_or_low_confidence",
                     "severity": "medium",
-                    "decision": "allow_local_llm",
+                    "decision": "request_agent_review",
                     "manual_tags": ["topic/test"],
                     "note": "server submit",
                 }
@@ -416,11 +421,11 @@ def test_review_server_submits_decisions_and_writes_action_outputs(tmp_path):
     assert (review_dir / "decisions-summary.md").exists()
     assert (review_dir / "next-actions.jsonl").exists()
     assert (review_dir / "decision-plan.md").exists()
-    assert "queue_local_llm_review" in (review_dir / "next-actions.jsonl").read_text(encoding="utf-8")
+    assert "queue_agent_semantic_review" in (review_dir / "next-actions.jsonl").read_text(encoding="utf-8")
     assert (tmp_path / "assets" / "asset-index.jsonl").exists()
     assert (tmp_path / "html" / "knowledge-index.html").exists()
     asset_text = (tmp_path / "assets" / "asset-index.jsonl").read_text(encoding="utf-8")
-    assert "local_llm_queue" in asset_text
+    assert "agent_semantic_queue" in asset_text
     assert "topic/test" in asset_text
     assert "applied_asset_index_jsonl" in result["outputs"]
 
@@ -433,9 +438,9 @@ def test_decisions_cli_reads_exported_jsonl_and_writes_summary(tmp_path):
                 "path": "C:/Users/me/Documents/allowed.md",
                 "category": "rules_only_or_low_confidence",
                 "severity": "medium",
-                "decision": "allow_local_llm",
+                "decision": "request_agent_review",
                 "manual_tags": ["topic/semantic_analysis"],
-                "note": "用本地模型复核",
+                "note": "让宿主 agent 大模型复核",
             },
             ensure_ascii=False,
         )
@@ -448,7 +453,7 @@ def test_decisions_cli_reads_exported_jsonl_and_writes_summary(tmp_path):
 
     assert code == 0, stderr
     assert "review_decisions:" in stdout
-    assert "allow_local_llm: 1" in stdout
+    assert "request_agent_review: 1" in stdout
     assert "decisions_summary_md" in stdout
     assert summary_path.exists()
     assert "人工批复结果摘要" in summary_path.read_text(encoding="utf-8")
@@ -461,7 +466,7 @@ def test_decisions_cli_writes_agent_action_plan(tmp_path):
             "path": "C:/Users/me/Documents/allowed.md",
             "category": "rules_only_or_low_confidence",
             "severity": "medium",
-            "decision": "allow_local_llm",
+            "decision": "request_agent_review",
             "manual_tags": ["topic/semantic_analysis"],
         },
         {
@@ -522,17 +527,20 @@ def test_decisions_cli_writes_agent_action_plan(tmp_path):
     assert all(expected_action_fields <= record.keys() for record in payload["actions"])
     assert all(isinstance(record["requires_confirmation"], bool) for record in payload["actions"])
     action_names = {record["action"] for record in actions}
-    assert "queue_local_llm_review" in action_names
+    assert "queue_agent_semantic_review" in action_names
     assert "record_manual_tags" in action_names
-    assert "propose_cloud_llm_authorization" in action_names
+    assert "propose_cloud_llm_authorization" not in action_names
     assert "add_to_ignore_candidates" in action_names
+    agent_actions = [record for record in actions if record["action"] == "queue_agent_semantic_review"]
+    assert len(agent_actions) == 2
     actions_by_name = {record["action"]: record for record in actions}
-    assert actions_by_name["queue_local_llm_review"]["source_decision"] == "allow_local_llm"
+    assert any(record["source_decision"] == "request_agent_review" for record in agent_actions)
+    assert any(record["source_decision"] == "allow_cloud_llm" for record in agent_actions)
     assert actions_by_name["record_manual_tags"]["manual_tags"] == ["topic/semantic_analysis"]
     assert actions_by_name["record_manual_tags"]["privacy_level"] == "local_metadata"
-    assert actions_by_name["propose_cloud_llm_authorization"]["privacy_level"] == "cloud_candidate"
+    assert all(record["privacy_level"] == "local_extracted_text" for record in agent_actions)
     assert actions_by_name["add_to_ignore_candidates"]["requires_confirmation"] is True
-    assert any(record["requires_confirmation"] for record in actions if record["action"] == "propose_cloud_llm_authorization")
+    assert not any(record["requires_confirmation"] for record in agent_actions)
     plan_text = plan_path.read_text(encoding="utf-8")
     assert "人工批复后续执行计划" in plan_text
     assert "不会直接移动、删除、重命名源文件" in plan_text

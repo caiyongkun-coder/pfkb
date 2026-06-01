@@ -18,6 +18,8 @@ Use this skill when the user asks about local file knowledge, personal-file inve
 
 ## Setup Workflow
 
+Hard requirement: first-time setup is a guided conversation, not a single directory prompt. If the user asks to initialize or configure AnyFile Wiki, do not stop after asking for scan folders. You must run or verify `agent-init`, read the generated configs, ask the privacy/root/analysis setup questions, summarize intended config edits, and run a dry-run scan before extraction or analysis.
+
 1. Check installation with `anyfile-wiki --help`.
 2. If missing, suggest or run from the repo: `python scripts/install_agent_skill.py --editable --extras parse,ocr`.
 3. Initialize agent-readable configs:
@@ -35,8 +37,10 @@ Use this skill when the user asks about local file knowledge, personal-file inve
    - `agent-llm`: host agent reads extracted text and writes back better summaries; no extra API key.
    - `local-llm`: local model service such as Ollama or LM Studio.
    - `cloud-llm`: cloud API, only after explicit allowed paths and risk acknowledgement.
-7. Update `privacy.yaml` / `roots.yaml` / `agent-profile.yaml` only after the user answers.
+7. Update `privacy.yaml` / `roots.yaml` / `agent-profile.yaml` only after the user answers; if existing config values will change, say exactly which values will change first.
 8. Run a dry-run scan and explain the report before the first extraction or analysis run.
+
+If the user only gives a directory during first-time setup, treat it as one answer to the setup questions, then continue asking for sensitive folders, metadata-only folders, no-embedding needs, and analysis mode.
 
 ## Daily Run Workflow
 
@@ -76,7 +80,7 @@ For full semantic indexing of all successfully extracted, privacy-allowed text:
 anyfile-wiki agent-task --kind semantic-index --scope all-extractable --out data/daily-run/agent-review
 ```
 
-For review-page decisions such as `queue_local_llm_review`, use:
+For review-page decisions such as `queue_agent_semantic_review`, use:
 
 ```powershell
 anyfile-wiki agent-task --kind semantic-review --in data/daily-run/review/next-actions.jsonl --out data/daily-run/agent-review
@@ -93,7 +97,7 @@ Then:
    anyfile-wiki agent-review-apply --in data/daily-run/agent-review/results.jsonl
    ```
 
-Use `cloud-llm` only for unattended standalone CLI runs with explicit `configs/llm.yaml`, allowed paths, risk acknowledgement, and API key.
+The review page's "Agent review" action means: use the current host agent model on already extracted local text. It is not a cloud-LLM authorization flow, does not require `configs/llm.yaml`, and must not upload original files. Use `cloud-llm` only for unattended standalone CLI runs with explicit `configs/llm.yaml`, allowed paths, risk acknowledgement, and API key.
 
 ## Query Workflow
 
@@ -122,16 +126,17 @@ Use `selected`, `opened`, `cited`, or `search_hit` as the event type.
 
 ## Common Intents
 
-- Initialize: run `agent-init`, then explain privacy and roots.
+- Initialize: run `agent-init`, read/explain privacy, roots, schedule, and profile, ask the full setup questions, then dry-run before extraction.
 - Continue scan: run `anyfile-wiki run --out data/daily-run`.
 - Show progress: run `anyfile-wiki run --out data/daily-run --status`.
 - Open asset browser: point to `data/daily-run/html/knowledge-index.html`.
-- Open review page: start `review-server`; point to `data/daily-run/review/human-review.html` only if service mode is not available.
+- Open review page: start `review-server`, open the printed `review_url`, and point to `data/daily-run/review/human-review.html` only if service mode is unavailable.
+- Create cleanup plan: run `anyfile-wiki archive-plan --asset-index data/daily-run/assets/asset-index.jsonl --out data/daily-run/cleanup`; treat every candidate as proposed-only and requiring human confirmation.
 - Improve all extracted summaries with host-agent understanding: run `agent-task --kind semantic-index --scope all-extractable`, analyze extracted text, then run `agent-review-apply`.
 - Run review-only host-agent semantic review: run `agent-task --kind semantic-review`, analyze extracted text, then run `agent-review-apply`.
 - Find a file/type/topic: run `query`, then cite paths and virtual paths.
 - Find review items: query `waiting review`, `needs review`, or inspect `human-review.jsonl`.
-- Find duplicates/archive candidates: query `duplicate_candidate`, `nas`, `cold`, or inspect `asset-score.jsonl`.
+- Find duplicates/archive candidates: run `archive-plan`, or query `duplicate_candidate`, `nas`, `cold`, or inspect `asset-score.jsonl`.
 
 ## Output Style
 

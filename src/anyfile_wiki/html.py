@@ -979,6 +979,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
         active: "正常资产 / Active",
         confirmed: "人工确认 / Confirmed",
         manual_reviewed: "人工整理 / Manual reviewed",
+        agent_semantic_queue: "Agent 语义复核队列 / Agent semantic queue",
         local_llm_queue: "本地 LLM 队列 / Local LLM queue",
         cloud_candidate: "云端候选 / Cloud candidate",
         cloud_authorization_conflict: "云端授权冲突 / Cloud conflict",
@@ -1093,7 +1094,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
     function assetStatusClass(value, needsConfirmation) {
       const status = String(value || "active");
       if (status === "cloud_authorization_conflict") return "danger";
-      if (needsConfirmation || ["local_llm_queue", "cloud_candidate", "ignore_candidate", "deferred", "review_required"].includes(status)) return "warning";
+      if (needsConfirmation || ["agent_semantic_queue", "local_llm_queue", "cloud_candidate", "ignore_candidate", "deferred", "review_required"].includes(status)) return "warning";
       if (["confirmed", "manual_reviewed", "private_metadata_only"].includes(status)) return "ok";
       return "neutral";
     }

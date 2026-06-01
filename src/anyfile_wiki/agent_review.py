@@ -22,6 +22,7 @@ SEMANTIC_TASK_MODES = {"agent-llm", "cloud-llm"}
 ELIGIBLE_EXTRACT_STATUSES = {"ok", "up_to_date"}
 
 SEMANTIC_REVIEW_ACTIONS = {
+    "queue_agent_semantic_review",
     "queue_local_llm_review",
     "propose_cloud_llm_authorization",
 }
@@ -481,7 +482,7 @@ def _privacy_context(action: dict[str, Any], review_item: dict[str, Any], analys
         "source": "extracted_text_only",
         "access_policy": str(review_item.get("access_policy") or "unknown"),
         "review_category": str(action.get("category") or review_item.get("category") or ""),
-        "privacy_level": str(action.get("privacy_level") or "local_extracted_text"),
+        "privacy_level": "local_extracted_text",
         "embedding_allowed": bool(analysis.get("embedding_allowed")),
         "allowed_to_read_original": False,
         "must_not_read_original": True,

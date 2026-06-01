@@ -14,6 +14,7 @@
 - `asset-usage-events.jsonl`：agent 或人类后续使用事件账本。生成 sidecar 时只创建空文件，不覆盖已有事件。
 - `asset-score.jsonl`：使用热度、保留价值、归档建议和删除风险评分。
 - `asset-sidecar-report.md`：简短统计报告。
+- `archive-plan.jsonl` / `archive-plan.md`：由 `archive-plan` 命令生成的安全清理候选计划，不会自动执行。
 
 ## 命令
 
@@ -40,6 +41,18 @@ anyfile-wiki sidecars --asset-index data/assets/asset-index.jsonl --out data/ass
 ```powershell
 anyfile-wiki sidecars --asset-index data/assets/asset-index.jsonl --sidecar-level light
 ```
+
+从 sidecar 评分生成可复核的清理候选计划：
+
+```powershell
+anyfile-wiki archive-plan --asset-index data/assets/asset-index.jsonl --out data/cleanup
+```
+
+`archive-plan` 会读取同目录下的 `collection-index.jsonl` 和 `asset-score.jsonl`，输出：
+
+- `archive-plan.jsonl`：给 agent 或后续 UI 使用的候选 manifest。
+- `archive-plan.md`：给人类复核的中文报告。
+- `archive-plan-summary.json`：统计、来源路径和安全边界摘要。
 
 ## Asset ID
 
@@ -78,3 +91,5 @@ asset:path-sha256:<sha256(normalized_path)>
 - `delete_risk_score`：删除风险，越高越不能删。
 
 `archive_policy` 只表示建议，不执行任何操作。低使用不代表可以删除；`review_required`、`master`、高保留价值或 `never_delete` 都会提高删除风险。
+
+`archive-plan` 输出中的 `proposed_operation` 始终是 `none`，`execution_allowed` 始终是 `false`。任何未来真实移动、删除、重命名都必须先由人确认，并生成包含 `original_path`、`target_path` 和动作人的独立回滚 manifest。

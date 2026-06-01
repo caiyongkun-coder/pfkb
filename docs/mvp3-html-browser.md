@@ -55,7 +55,7 @@ data/first-html/knowledge-index.html
 ## 后续计划
 
 - 扩展 `human-review.html` 的批量批复、标签编辑和决策复查能力。
-- 让 agent 读取 `asset-index.jsonl` 中的 `local_llm_queue` 后自动触发本地 LLM 复核，并把复核结果继续回写资产索引。
+- 让 agent 读取 `next-actions.jsonl` 中的 `queue_agent_semantic_review` 后自动触发宿主 agent 语义复核，并把复核结果继续回写资产索引。
 - 增加主题页、项目页、来源应用页和时间线。
 - 增加可选的本地搜索索引，让大规模知识库仍然能快速筛选。
 - 继续保留 Markdown 和 JSONL 输出，HTML 只是更适合人类浏览的一层。

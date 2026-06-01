@@ -136,13 +136,13 @@ def test_build_asset_index_applies_review_actions_and_keeps_review_only_assets()
         },
         {
             "path": "C:/docs/private-key.pem",
-            "action": "propose_cloud_llm_authorization",
-            "title": "云端候选",
-            "source_decision": "allow_cloud_llm",
+            "action": "queue_agent_semantic_review",
+            "title": "Agent 语义复核",
+            "source_decision": "request_agent_review",
             "category": "policy_blocked",
             "severity": "high",
-            "privacy_level": "cloud_candidate",
-            "requires_confirmation": True,
+            "privacy_level": "local_extracted_text",
+            "requires_confirmation": False,
         },
         {
             "path": "C:/docs/mock-design.psd",
@@ -172,7 +172,7 @@ def test_build_asset_index_applies_review_actions_and_keeps_review_only_assets()
     assert by_name["manual.md"]["accepted_tags"] == by_name["manual.md"]["tags"]
     assert "topic/semantic_analysis" in by_name["manual.md"]["manual_tags"]
     assert by_name["private-key.pem"]["asset_source"] == "review_only"
-    assert by_name["private-key.pem"]["asset_status"] == "cloud_authorization_conflict"
+    assert by_name["private-key.pem"]["asset_status"] == "review_required"
     assert by_name["private-key.pem"]["review_warning"]
     assert "sensitivity/credential" in by_name["private-key.pem"]["tags"]
     assert by_name["mock-design.psd"]["asset_source"] == "review_only"

@@ -17,6 +17,7 @@ ASSET_STATUS_LABELS = {
     "active": "正常资产 / Active",
     "confirmed": "人工确认 / Confirmed",
     "manual_reviewed": "人工整理 / Manual reviewed",
+    "agent_semantic_queue": "Agent 语义复核队列 / Agent semantic queue",
     "local_llm_queue": "本地 LLM 队列 / Local LLM queue",
     "cloud_candidate": "云端候选 / Cloud candidate",
     "cloud_authorization_conflict": "云端授权冲突 / Cloud conflict",
@@ -28,6 +29,7 @@ ASSET_STATUS_LABELS = {
 
 _PRIMARY_REVIEW_ACTIONS = {
     "accept_current_analysis",
+    "queue_agent_semantic_review",
     "queue_local_llm_review",
     "propose_cloud_llm_authorization",
     "apply_manual_metadata",
@@ -374,12 +376,10 @@ def _status_for_action(action: dict[str, Any], category: str) -> tuple[str, str]
         return "review_required" if category else "active", ""
     if name == "accept_current_analysis":
         return "confirmed", ""
-    if name == "queue_local_llm_review":
-        return "local_llm_queue", ""
-    if name == "propose_cloud_llm_authorization":
+    if name in {"queue_agent_semantic_review", "queue_local_llm_review", "propose_cloud_llm_authorization"}:
         if category in _CLOUD_BLOCKED_CATEGORIES:
-            return "cloud_authorization_conflict", "隐私策略阻止读取的文件不能直接进入云端候选；必须先修改隐私配置，并再次确认风险。"
-        return "cloud_candidate", ""
+            return "review_required", "隐私策略阻止读取正文，不能加入 agent 语义复核；请先调整隐私策略或人工整理。"
+        return "agent_semantic_queue", ""
     if name in {"apply_manual_metadata", "record_manual_tags"}:
         return "manual_reviewed", ""
     if name == "add_to_ignore_candidates":
@@ -403,6 +403,7 @@ def _review_reason_for_status(status: str, fallback: Any) -> str:
     reasons = {
         "confirmed": "human_confirmed_current_analysis",
         "manual_reviewed": "human_manual_metadata",
+        "agent_semantic_queue": "queued_for_agent_semantic_review",
         "local_llm_queue": "queued_for_local_llm_review",
         "cloud_candidate": "cloud_llm_authorization_candidate",
         "cloud_authorization_conflict": "cloud_llm_authorization_conflicts_with_privacy_policy",
@@ -416,7 +417,7 @@ def _review_reason_for_status(status: str, fallback: Any) -> str:
 
 def _review_tags(status: str, category: str) -> list[str]:
     tags = ["topic/human_review"] if status != "active" else []
-    if status in {"local_llm_queue", "cloud_candidate", "cloud_authorization_conflict", "ignore_candidate", "deferred", "review_required"}:
+    if status in {"agent_semantic_queue", "local_llm_queue", "cloud_candidate", "cloud_authorization_conflict", "ignore_candidate", "deferred", "review_required"}:
         tags.append("workflow/waiting_review")
     elif status in {"confirmed", "manual_reviewed", "private_metadata_only"}:
         tags.append("workflow/active")

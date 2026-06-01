@@ -141,7 +141,7 @@ anyfile-wiki review --inventory data/first-scan/inventory.sqlite --analysis data
 - `unsupported_format`：暂时没有解析器。
 - `not_extracted`：允许提取但尚未提取。
 - `extraction_problem`：提取失败或跳过。
-- `rules_only_or_low_confidence`：规则版标签或低置信度结果，需要用户或本地 LLM 复核。
+- `rules_only_or_low_confidence`：规则版标签或低置信度结果，需要用户或宿主 agent 大模型复核。
 - `cloud_not_authorized`：云端模式下路径未显式授权。
 - `cloud_forbidden_by_policy`：策略禁止云端处理。
 
@@ -202,14 +202,13 @@ anyfile-wiki assets --analysis data/first-analyze/knowledge-index.jsonl --action
 
 当前 HTML 审阅页支持这些批复动作：
 
-- 允许本地 LLM 查看这个文件。
-- 在云端策略已经显式授权的前提下，允许云端 LLM 查看这个文件。
+- 让当前宿主 agent 大模型读取已提取文本复核这个文件。
 - 稍后审核这个文件。
 - 忽略这个文件。
 - 标记为已人工整理。
 - 保持本地-only，不允许云端读取。
 
-这些交互不会悄悄删除文件，也不会直接改隐私配置。当前会先把用户选择写入独立记录，再由 `anyfile-wiki decisions` 转成后续动作计划，例如本地 LLM 复核队列、忽略候选、人工标签覆盖记录和云端授权候选；随后 `anyfile-wiki assets` 会把动作写回最终资产索引，供 agent 和 HTML 资产页使用。
+这些交互不会悄悄删除文件，也不会直接改隐私配置。当前会先把用户选择写入独立记录，再由 `anyfile-wiki decisions` 转成后续动作计划，例如宿主 agent 语义复核队列、忽略候选和人工标签覆盖记录；随后 `anyfile-wiki assets` 会把动作写回最终资产索引，供 agent 和 HTML 资产页使用。复核页的模型复核不是云端 LLM 授权流程，不要求 `configs/llm.yaml`。
 
 ## 设计原则
 

@@ -10,6 +10,7 @@ import json
 
 VALID_DECISIONS = {
     "confirm_current",
+    "request_agent_review",
     "allow_local_llm",
     "allow_cloud_llm",
     "mark_manual",
@@ -17,6 +18,8 @@ VALID_DECISIONS = {
     "later",
     "keep_private",
 }
+
+MODEL_REVIEW_DECISIONS = {"request_agent_review", "allow_local_llm", "allow_cloud_llm"}
 
 
 @dataclass(frozen=True)
@@ -50,6 +53,7 @@ class DecisionAction:
 
 _ACTION_TITLES = {
     "accept_current_analysis": "确认当前分析结果",
+    "queue_agent_semantic_review": "加入宿主 Agent 语义复核队列",
     "queue_local_llm_review": "加入本地 LLM 复核队列",
     "propose_cloud_llm_authorization": "生成云端 LLM 授权候选",
     "apply_manual_metadata": "应用人工整理结果",
@@ -243,7 +247,8 @@ def write_decision_plan_md(actions: list[DecisionAction], path: str | Path) -> N
         "## 执行原则",
         "",
         "- 这是计划文件，不会直接移动、删除、重命名源文件，也不会直接修改隐私配置。",
-        "- `allow_cloud_llm` 只会生成云端授权候选；没有显式配置授权路径和风险确认前，agent 不应调用云端模型。",
+        "- 复核页里的模型复核动作只表示交给当前宿主 agent 使用已配置模型读取本地提取文本；不会触发 AnyFile Wiki 云端 LLM，也不会上传源文件。",
+        "- 显式 `cloud-llm` 分析模式仍必须单独配置授权路径和风险确认；它不是人工复核页的默认后续动作。",
         "- 人工标签只应作为标签覆盖或补充记录保存，不应自动扩大文件读取权限。",
         "",
         "## 按动作统计",
@@ -323,22 +328,13 @@ def _decision_to_primary_action(decision: ReviewDecision) -> DecisionAction:
             reason="人类确认当前分析结果可接受。",
             next_step="保留当前摘要、标签和复核状态，并让后续知识索引优先采用该结果。",
         )
-    if decision.decision == "allow_local_llm":
+    if decision.decision in MODEL_REVIEW_DECISIONS:
         return DecisionAction(
             **common,
-            action="queue_local_llm_review",
-            privacy_level="local_content",
-            reason="人类允许本地模型读取该文件的提取文本进行语义复核。",
-            next_step="在隐私策略和 LLM 配置仍然允许的前提下，把该文件加入本地 LLM 分析队列。",
-        )
-    if decision.decision == "allow_cloud_llm":
-        return DecisionAction(
-            **common,
-            action="propose_cloud_llm_authorization",
-            privacy_level="cloud_candidate",
-            requires_confirmation=True,
-            reason="人类在复核页表达了云端 LLM 候选意向，但云端读取仍需要显式路径授权和风险确认。",
-            next_step="生成配置变更建议或待确认清单；只有 configs/llm.yaml 已授权路径后，才允许进入云端 LLM 队列。",
+            action="queue_agent_semantic_review",
+            privacy_level="local_extracted_text",
+            reason="人类要求宿主 agent 大模型读取已提取文本做语义复核；不调用 AnyFile Wiki 云端 LLM，不上传源文件。",
+            next_step="运行 anyfile-wiki agent-task --kind semantic-review 生成任务；宿主 agent 只读取 extracted_text_path，写出语义结果后再运行 agent-review-apply。",
         )
     if decision.decision == "mark_manual":
         return DecisionAction(
